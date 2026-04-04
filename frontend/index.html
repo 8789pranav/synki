@@ -4,428 +4,227 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Synki - Your AI Girlfriend 💕</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        :root {
-            --primary: #ff6b9d;
-            --primary-dark: #e91e63;
-            --secondary: #7c4dff;
-            --bg-dark: #1a1a2e;
-            --text-primary: #ffffff;
-            --text-secondary: #b8b8d1;
-            --success: #4caf50;
-            --error: #f44336;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, var(--bg-dark), #2d1f4e);
-            color: var(--text-primary);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .container {
-            max-width: 450px;
-            width: 100%;
-            padding: 20px;
-            text-align: center;
-        }
-
-        .logo {
-            font-size: 2.5rem;
-            font-weight: 600;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 10px;
-        }
-
-        .status {
-            display: inline-block;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            background: rgba(255,255,255,0.1);
-            margin-bottom: 20px;
-        }
-        .status.connected { background: rgba(76,175,80,0.3); color: #4caf50; }
-        .status.waiting { background: rgba(255,193,7,0.3); color: #ffc107; }
-        .status.error { background: rgba(244,67,54,0.3); color: #f44336; }
-
-        .avatar {
-            width: 160px;
-            height: 160px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 15px;
-            font-size: 4.5rem;
-            box-shadow: 0 10px 40px rgba(255, 107, 157, 0.3);
-            transition: all 0.3s;
-        }
-        .avatar.speaking {
-            animation: pulse 1s ease-in-out infinite;
-            box-shadow: 0 15px 60px rgba(255, 107, 157, 0.5);
-        }
-        .avatar.listening {
-            box-shadow: 0 10px 40px rgba(124, 77, 255, 0.4);
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
-
-        .avatar-status {
-            color: var(--text-secondary);
-            font-size: 1rem;
-            margin-bottom: 25px;
-        }
-
-        .transcript-box {
-            background: rgba(255,255,255,0.05);
-            border-radius: 16px;
-            padding: 16px;
-            margin: 20px 0;
-            min-height: 120px;
-            max-height: 180px;
-            overflow-y: auto;
-            text-align: left;
-        }
-
-        .message {
-            padding: 10px 14px;
-            border-radius: 12px;
-            margin-bottom: 8px;
-            font-size: 0.9rem;
-        }
-        .message.user {
-            background: rgba(124, 77, 255, 0.2);
-            margin-left: 30px;
-        }
-        .message.assistant {
-            background: rgba(255, 107, 157, 0.2);
-            margin-right: 30px;
-        }
-        .message.system {
-            background: rgba(255,255,255,0.1);
-            text-align: center;
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-        .message-label {
-            font-size: 0.7rem;
-            font-weight: 600;
-            opacity: 0.7;
-            margin-bottom: 4px;
-        }
-
-        .controls {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 14px 32px;
-            border: none;
-            border-radius: 50px;
-            font-size: 1rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
-
-        .btn-connect {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-        }
-        .btn-disconnect {
-            background: linear-gradient(135deg, var(--error), #c62828);
-            color: white;
-        }
-
-        .mic-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 30px;
-            font-size: 0.9rem;
-        }
-        .mic-status.active { background: rgba(76,175,80,0.3); }
-        .mic-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: var(--error);
-        }
-        .mic-status.active .mic-dot {
-            background: var(--success);
-            animation: blink 1s infinite;
-        }
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-
-        .console-box {
-            background: rgba(0,0,0,0.3);
-            border-radius: 12px;
-            padding: 10px;
-            margin-top: 20px;
-            max-height: 100px;
-            overflow-y: auto;
-            text-align: left;
-            font-family: 'Consolas', monospace;
-            font-size: 0.7rem;
-        }
-        .log { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .log.info { color: #64b5f6; }
-        .log.success { color: #81c784; }
-        .log.error { color: #e57373; }
-        .log.warn { color: #ffb74d; }
-        .log .time { color: #666; margin-right: 6px; }
-
-        audio { display: none; }
-    </style>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <h1 class="logo">💕 Synki</h1>
-        <div class="status" id="status">Click Connect to start</div>
-
-        <div class="avatar" id="avatar">🥰</div>
-        <p class="avatar-status" id="avatarStatus">Your AI Girlfriend awaits...</p>
-
-        <div class="transcript-box" id="transcript">
-            <div class="message system">Welcome baby! 💕 Connect to talk with Synki</div>
+    <!-- LOADING SCREEN -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-content">
+            <div class="loading-heart">💕</div>
+            <div class="loading-text">Loading Synki...</div>
         </div>
-
-        <div class="controls">
-            <button class="btn btn-connect" id="connectBtn">💕 Connect</button>
-            <div class="mic-status" id="micStatus"><span class="mic-dot"></span><span>Mic Off</span></div>
-            <button class="btn btn-disconnect" id="disconnectBtn" disabled>👋 Bye</button>
-        </div>
-
-        <div class="console-box" id="console"></div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.0.0/dist/livekit-client.umd.js"></script>
-    <script>
-        // LiveKit Config
-        const LIVEKIT_URL = 'wss://synk-wtut6pa9.livekit.cloud';
-        const API_KEY = 'APIQN76asqnXxN9';
-        const API_SECRET = 'MGVLskd6sFPvL8L6SJ0Nn6m7dogVSkWy7BKWGWOkfLZ';
+    <!-- AUTH SECTION -->
+    <div class="auth-section" id="authSection">
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <div class="auth-logo">💕</div>
+                    <h1 class="auth-title">Synki</h1>
+                    <p class="auth-subtitle">Your AI Girlfriend is waiting for you...</p>
+                </div>
 
-        // State
-        let room = null;
+                <div class="auth-error" id="authError">
+                    <span class="error-icon">⚠️</span>
+                    <span class="error-text" id="authErrorText"></span>
+                </div>
 
-        // Elements
-        const statusEl = document.getElementById('status');
-        const avatarEl = document.getElementById('avatar');
-        const avatarStatusEl = document.getElementById('avatarStatus');
-        const transcriptEl = document.getElementById('transcript');
-        const consoleEl = document.getElementById('console');
-        const connectBtn = document.getElementById('connectBtn');
-        const disconnectBtn = document.getElementById('disconnectBtn');
-        const micStatus = document.getElementById('micStatus');
+                <!-- LOGIN FORM -->
+                <form class="auth-form" id="loginForm">
+                    <div class="form-group">
+                        <label for="loginEmail">Email</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon">📧</span>
+                            <input type="email" id="loginEmail" placeholder="your@email.com" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon">🔒</span>
+                            <input type="password" id="loginPassword" placeholder="••••••••" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="loginBtn">
+                        <span class="btn-text">Login</span>
+                        <span class="btn-icon">💕</span>
+                    </button>
+                    <p class="auth-switch">
+                        New here? <a href="#" id="showSignup">Create an account</a>
+                    </p>
+                </form>
 
-        // Logger
-        function log(level, msg) {
-            const time = new Date().toLocaleTimeString();
-            consoleEl.innerHTML += `<div class="log ${level}"><span class="time">${time}</span>${msg}</div>`;
-            consoleEl.scrollTop = consoleEl.scrollHeight;
-            console[level === 'error' ? 'error' : 'log'](`[Synki] ${msg}`);
-        }
+                <!-- SIGNUP FORM -->
+                <form class="auth-form hidden" id="signupForm">
+                    <div class="form-group">
+                        <label for="signupName">Your Name</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon">👤</span>
+                            <input type="text" id="signupName" placeholder="What should I call you?" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="signupEmail">Email</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon">📧</span>
+                            <input type="email" id="signupEmail" placeholder="your@email.com" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="signupPassword">Password</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon">🔒</span>
+                            <input type="password" id="signupPassword" placeholder="Min 6 characters" minlength="6" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="signupBtn">
+                        <span class="btn-text">Create Account</span>
+                        <span class="btn-icon">💕</span>
+                    </button>
+                    <p class="auth-switch">
+                        Already have an account? <a href="#" id="showLogin">Login</a>
+                    </p>
+                </form>
+            </div>
+        </div>
+    </div>
 
-        // Add message to transcript
-        function addMessage(type, text) {
-            const div = document.createElement('div');
-            div.className = `message ${type}`;
-            if (type === 'user') div.innerHTML = `<div class="message-label">🗣️ You</div>${text}`;
-            else if (type === 'assistant') div.innerHTML = `<div class="message-label">💕 Synki</div>${text}`;
-            else div.textContent = text;
-            transcriptEl.appendChild(div);
-            transcriptEl.scrollTop = transcriptEl.scrollHeight;
-            while (transcriptEl.children.length > 20) transcriptEl.removeChild(transcriptEl.firstChild);
-        }
+    <!-- MAIN APP SECTION -->
+    <div class="app-section hidden" id="appSection">
+        <!-- HEADER -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="brand">
+                    <span class="brand-icon">💕</span>
+                    <span class="brand-name">Synki</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-profile" id="userProfile">
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <div class="user-info">
+                        <span class="user-name" id="userName">User</span>
+                        <span class="user-email" id="userEmail">user@email.com</span>
+                    </div>
+                </div>
+                <button class="btn-icon-only" id="logoutBtn" title="Logout">
+                    <span>🚪</span>
+                </button>
+            </div>
+        </header>
 
-        // Generate JWT Token
-        async function createToken(identity, roomName) {
-            const b64url = str => btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-            const now = Math.floor(Date.now() / 1000);
-            
-            const header = { alg: 'HS256', typ: 'JWT' };
-            const payload = {
-                iss: API_KEY,
-                sub: identity,
-                iat: now,
-                exp: now + 3600,
-                nbf: now,
-                jti: `${identity}-${now}`,
-                name: identity,
-                video: {
-                    room: roomName,
-                    roomJoin: true,
-                    roomCreate: true,
-                    canPublish: true,
-                    canSubscribe: true,
-                    canPublishData: true
-                }
-            };
+        <!-- MAIN CONTENT -->
+        <main class="app-main">
+            <div class="app-content">
+                <!-- AVATAR CARD -->
+                <div class="card avatar-card">
+                    <div class="avatar-wrapper">
+                        <div class="avatar-ring">
+                            <div class="avatar" id="avatar">
+                                <span class="avatar-emoji">👩</span>
+                            </div>
+                        </div>
+                        <div class="avatar-status" id="avatarStatus">Ready to talk</div>
+                        <div class="emotion-badge" id="emotionBadge">
+                            <span class="emotion-icon">😊</span>
+                            <span class="emotion-text">Happy</span>
+                        </div>
+                    </div>
 
-            const headerEnc = b64url(JSON.stringify(header));
-            const payloadEnc = b64url(JSON.stringify(payload));
-            const message = `${headerEnc}.${payloadEnc}`;
+                    <!-- CONNECTION CONTROLS -->
+                    <div class="connection-controls">
+                        <button class="btn btn-success btn-lg" id="connectBtn">
+                            <span class="btn-icon">🎤</span>
+                            <span class="btn-text">Start Talking</span>
+                        </button>
+                        <button class="btn btn-danger btn-lg hidden" id="disconnectBtn">
+                            <span class="btn-icon">📞</span>
+                            <span class="btn-text">End Call</span>
+                        </button>
+                    </div>
 
-            const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(API_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-            const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
-            const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-            
-            return `${message}.${sigB64}`;
-        }
+                    <div class="mic-indicator" id="micIndicator">
+                        <div class="mic-dot"></div>
+                        <span class="mic-text">Microphone Off</span>
+                    </div>
+                </div>
 
-        // Connect
-        connectBtn.onclick = async () => {
-            try {
-                connectBtn.disabled = true;
-                setStatus('Connecting...', '');
-                log('info', 'Connecting to Synki...');
+                <!-- CHAT CARD -->
+                <div class="card chat-card">
+                    <div class="card-header">
+                        <span class="card-icon">💬</span>
+                        <span class="card-title">Conversation</span>
+                    </div>
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message message-system">
+                            <span class="message-icon">💕</span>
+                            <span class="message-text">Connect to start chatting with Synki!</span>
+                        </div>
+                    </div>
+                </div>
 
-                const roomName = `synki-${Date.now()}`;
-                const identity = `user-${Math.random().toString(36).substr(2, 6)}`;
-
-                const token = await createToken(identity, roomName);
-                log('success', 'Token created');
-
-                room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
-
-                // Room events
-                room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
-                    log('info', `Track subscribed: ${track.kind} from ${participant.identity}`);
-                    if (track.kind === 'audio') {
-                        const audio = track.attach();
-                        document.body.appendChild(audio);
-                        avatarEl.classList.add('speaking');
-                        avatarEl.classList.remove('listening');
-                        avatarStatusEl.textContent = 'Synki बोल रही है... 💕';
-                    }
-                });
-
-                room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
-                    if (track.kind === 'audio') track.detach().forEach(el => el.remove());
-                });
-
-                room.on(LivekitClient.RoomEvent.TrackMuted, (pub, participant) => {
-                    if (!participant.isLocal) {
-                        avatarEl.classList.remove('speaking');
-                        avatarEl.classList.add('listening');
-                        avatarStatusEl.textContent = 'सुन रही हूं जान... 🎧';
-                    }
-                });
-
-                room.on(LivekitClient.RoomEvent.TrackUnmuted, (pub, participant) => {
-                    if (!participant.isLocal && pub.kind === 'audio') {
-                        avatarEl.classList.add('speaking');
-                        avatarEl.classList.remove('listening');
-                        avatarStatusEl.textContent = 'Synki बोल रही है... 💕';
-                    }
-                });
-
-                room.on(LivekitClient.RoomEvent.ParticipantConnected, (p) => {
-                    log('success', `${p.identity} joined`);
-                    if (p.identity.includes('agent') || p.identity.includes('AW_')) {
-                        addMessage('system', '💕 Synki आ गई! बात करो baby...');
-                        avatarStatusEl.textContent = 'Synki is here! बोलो जान...';
-                        setStatus('Connected 💕', 'connected');
-                    }
-                });
-
-                room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (p) => {
-                    log('warn', `${p.identity} left`);
-                    if (!p.isLocal) {
-                        avatarStatusEl.textContent = 'Synki disconnected...';
-                    }
-                });
-
-                room.on(LivekitClient.RoomEvent.Disconnected, () => {
-                    log('warn', 'Disconnected');
-                    handleDisconnect();
-                });
-
-                room.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
-                    const isUserSpeaking = speakers.some(s => s.isLocal);
-                    if (isUserSpeaking) {
-                        avatarEl.classList.add('listening');
-                        avatarEl.classList.remove('speaking');
-                    }
-                });
-
-                // Connect
-                await room.connect(LIVEKIT_URL, token);
-                log('success', `Connected to room: ${roomName}`);
-
-                // Enable mic (auto)
-                await room.localParticipant.setMicrophoneEnabled(true);
-                log('success', 'Microphone enabled');
+                <!-- MEMORIES CARD -->
+                <div class="card memories-card">
+                    <div class="card-header">
+                        <span class="card-icon">🧠</span>
+                        <span class="card-title">Synki Remembers</span>
+                    </div>
+                    <div class="memories-list" id="memoriesList">
+                        <div class="memory-item">
+                            <span class="memory-icon">✨</span>
+                            <span class="memory-text">Getting to know you...</span>
+                        </div>
+                    </div>
+                </div>
                 
-                setStatus('Waiting for Synki...', 'waiting');
-                avatarStatusEl.textContent = 'Connecting to Synki...';
-                updateUI(true);
-                addMessage('system', '✨ Connected! Waiting for Synki to join...');
+                <!-- DEBUG PANEL -->
+                <div class="card debug-card" id="debugCard">
+                    <div class="card-header" style="cursor: pointer;" onclick="toggleDebug()">
+                        <span class="card-icon">🔧</span>
+                        <span class="card-title">Debug Log</span>
+                        <span class="card-toggle" id="debugToggle">▼</span>
+                    </div>
+                    <div class="debug-log" id="debug-log">
+                        <div class="log-entry">
+                            <span class="log-time">--:--:--</span>
+                            <span class="log-module">[System]</span> Debug log initialized
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
 
-            } catch (err) {
-                log('error', `Error: ${err.message}`);
-                setStatus('Error', 'error');
-                connectBtn.disabled = false;
-                addMessage('system', `❌ Connection failed: ${err.message}`);
+        <!-- STATUS BAR -->
+        <footer class="status-bar" id="statusBar">
+            <div class="status-dot"></div>
+            <span class="status-text">Disconnected</span>
+        </footer>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.0.0/dist/livekit-client.umd.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/livekit.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // Debug panel toggle
+        function toggleDebug() {
+            const log = document.getElementById('debug-log');
+            const toggle = document.getElementById('debugToggle');
+            if (log.style.display === 'none') {
+                log.style.display = 'block';
+                toggle.textContent = '▼';
+            } else {
+                log.style.display = 'none';
+                toggle.textContent = '▶';
             }
-        };
-
-        // Disconnect
-        disconnectBtn.onclick = async () => {
-            log('info', 'Disconnecting...');
-            if (room) await room.disconnect();
-            handleDisconnect();
-        };
-
-        function handleDisconnect() {
-            room = null;
-            setStatus('Disconnected', '');
-            avatarStatusEl.textContent = 'Click Connect to talk again 💕';
-            avatarEl.classList.remove('speaking', 'listening');
-            updateUI(false);
-            addMessage('system', '👋 Bye bye baby! Miss you...');
         }
-
-        function setStatus(text, className) {
-            statusEl.textContent = text;
-            statusEl.className = `status ${className}`;
-        }
-
-        function updateUI(connected) {
-            connectBtn.disabled = connected;
-            disconnectBtn.disabled = !connected;
-            micStatus.classList.toggle('active', connected);
-            micStatus.querySelector('span:last-child').textContent = connected ? 'Mic On 🎤' : 'Mic Off';
-        }
-
-        log('info', 'Synki frontend ready! 💕');
     </script>
 </body>
 </html>

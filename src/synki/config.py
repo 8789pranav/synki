@@ -7,8 +7,12 @@ Centralized configuration using Pydantic Settings.
 from functools import lru_cache
 from typing import Literal
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Load .env.local BEFORE defining settings classes
+load_dotenv(".env.local")
 
 
 class LiveKitSettings(BaseSettings):
@@ -68,6 +72,16 @@ class RedisSettings(BaseSettings):
     memory_ttl: int = Field(default=86400 * 30, description="Long-term memory TTL (30 days)")
 
 
+class SupabaseSettings(BaseSettings):
+    """Supabase connection settings for database."""
+    
+    model_config = SettingsConfigDict(env_prefix="SUPABASE_")
+    
+    url: str = Field(default="", description="Supabase project URL")
+    key: str = Field(default="", description="Supabase anon/public key")
+    service_key: str = Field(default="", description="Supabase service role key")
+
+
 class PersonaSettings(BaseSettings):
     """Persona configuration settings."""
     
@@ -106,6 +120,7 @@ class AppSettings(BaseSettings):
     openai: OpenAISettings = Field(default_factory=OpenAISettings)
     cartesia: CartesiaSettings = Field(default_factory=CartesiaSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
+    supabase: SupabaseSettings = Field(default_factory=SupabaseSettings)
     persona: PersonaSettings = Field(default_factory=PersonaSettings)
 
 
