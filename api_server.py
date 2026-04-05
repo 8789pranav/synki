@@ -328,12 +328,292 @@ async def get_user_stats(user_id: str, user: AuthUser = Depends(get_current_user
 @app.get("/app")
 async def serve_app():
     """Serve the main app page."""
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+    return FileResponse(os.path.join(FRONTEND_DIR, "app.html"))
 
 @app.get("/login")
 async def serve_login():
     """Serve the login page."""
     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+@app.get("/test-notification")
+async def serve_notification_test():
+    """Serve the notification test/debug page."""
+    return FileResponse(os.path.join(FRONTEND_DIR, "test_notification.html"))
+
+@app.get("/call.html")
+async def serve_call():
+    """Serve the incoming call page."""
+    return FileResponse(os.path.join(FRONTEND_DIR, "call.html"))
+
+@app.get("/sw.js")
+async def serve_service_worker():
+    """Serve the service worker."""
+    return FileResponse(os.path.join(FRONTEND_DIR, "sw.js"), media_type="application/javascript")
+
+
+# ==================== AGENT PROMPT VIEWER ====================
+
+@app.get("/api/agent/prompt")
+async def get_agent_prompt(user_id: str):
+    """Get the current system prompt AND context used by the agent for a user."""
+    from synki.orchestrator.persona_engine import PersonaEngine
+    from synki.orchestrator.context_builder import ContextBuilder
+    from synki.models import PersonaProfile, LanguageStyle, PersonaMode, EmotionState
+    
+    try:
+        # Create persona engine with default profile
+        profile = PersonaProfile(
+            mode=PersonaMode.GIRLFRIEND,
+            language_style=LanguageStyle.HINGLISH,
+            tone="soft, caring, slightly playful",
+            question_limit=1,
+        )
+        engine = PersonaEngine(profile)
+        
+        # Create context builder
+        supabase = db_service.supabase if hasattr(db_service, 'supabase') else None
+        ctx_builder = ContextBuilder(supabase_client=supabase)
+        
+        # Get user info from database
+        user_name = None
+        memory_facts = []
+        
+        try:
+            # Try to get user profile
+            result = db_service.supabase.table('profiles').select('name').eq('id', user_id).execute()
+            if result.data:
+                user_name = result.data[0].get('name')
+            
+            # Try to get memories
+            mem_result = db_service.supabase.table('memories').select('facts').eq('user_id', user_id).execute()
+            if mem_result.data and mem_result.data[0].get('facts'):
+                raw_facts = mem_result.data[0].get('facts', [])[:5]
+                # Convert facts from [{key, value}] to ["key: value"] strings
+                for f in raw_facts:
+                    if isinstance(f, dict):
+                        memory_facts.append(f"{f.get('key', '')}: {f.get('value', '')}")
+                    else:
+                        memory_facts.append(str(f))
+        except Exception as e:
+            logger.warning(f"Could not fetch user data: {e}")
+        
+        # Generate the base system prompt
+        system_prompt = engine.get_system_prompt(
+            user_name=user_name,
+            user_emotion=EmotionState.NEUTRAL,
+            memory_facts=memory_facts
+        )
+        
+        # Build the SMART CONTEXT (what actually gets injected)
+        context_text = ""
+        context_data = {}
+        try:
+            prompt_context = await ctx_builder.build_context(
+                user_id=user_id,
+                user_message="[Context preview - no actual message]",
+                recent_messages=[],
+            )
+            context_text = ctx_builder.format_for_prompt(prompt_context)
+            context_data = {
+                "user_name": prompt_context.user_name,
+                "current_mood": prompt_context.current_mood,
+                "stress_level": prompt_context.stress_level,
+                "time_of_day": prompt_context.time_of_day,
+                "time_based_hint": prompt_context.time_based_hint,
+                "recent_summaries_count": len(prompt_context.recent_summaries),
+                "questions_already_asked": prompt_context.questions_already_asked,
+                "conversation_flow": prompt_context.conversation_flow,
+                "likes": prompt_context.likes,
+                "dislikes": prompt_context.dislikes,
+                "behavior_hint": prompt_context.behavior_hint,
+                "contextual_suggestion": prompt_context.contextual_suggestion,
+                "suggested_follow_ups": prompt_context.suggested_follow_ups,
+            }
+        except Exception as e:
+            logger.warning(f"Could not build context: {e}")
+            context_text = f"[Error building context: {e}]"
+        
+        return {
+            "system_prompt": system_prompt,
+            "context_injection": context_text,
+            "context_data": context_data,
+            "user_name": user_name,
+            "memory_facts": memory_facts,
+            "profile": {
+                "mode": profile.mode.value,
+                "language_style": profile.language_style.value,
+                "tone": profile.tone,
+                "question_limit": profile.question_limit
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get prompt: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== PROACTIVE GF SYSTEM ====================
+
+from synki.proactive import DecisionEngine, ProactiveMessageGenerator, ProactiveScheduler
+from synki.proactive.decision_engine import ContactDecision, ContactType
+
+# Initialize proactive components
+proactive_engine = DecisionEngine(db_service.supabase if hasattr(db_service, 'supabase') else None)
+proactive_generator = ProactiveMessageGenerator()
+proactive_scheduler = None  # Initialize lazily
+
+def get_proactive_scheduler():
+    global proactive_scheduler
+    if proactive_scheduler is None:
+        supabase = db_service.supabase if hasattr(db_service, 'supabase') else None
+        proactive_scheduler = ProactiveScheduler(supabase)
+    return proactive_scheduler
+
+
+class ProactiveAnswerRequest(BaseModel):
+    pending_id: str
+    user_id: str
+
+
+class ProactiveTriggerRequest(BaseModel):
+    user_id: str
+    contact_type: str = "call"  # "call" or "message"
+
+
+@app.get("/api/proactive/pending")
+async def get_pending_contacts(user_id: str):
+    """Get pending proactive contacts for a user."""
+    try:
+        supabase = db_service.supabase if hasattr(db_service, 'supabase') else None
+        if not supabase:
+            return {"pending": [], "count": 0}
+        
+        result = supabase.table("proactive_pending")\
+            .select("*")\
+            .eq("user_id", user_id)\
+            .eq("status", "pending")\
+            .order("created_at", desc=True)\
+            .execute()
+        
+        return {
+            "pending": result.data or [],
+            "count": len(result.data) if result.data else 0
+        }
+    except Exception as e:
+        logger.error(f"Failed to get pending contacts: {e}")
+        return {"pending": [], "count": 0, "error": str(e)}
+
+
+@app.post("/api/proactive/answer")
+async def answer_proactive_contact(request: ProactiveAnswerRequest):
+    """Answer/acknowledge a proactive contact."""
+    try:
+        supabase = db_service.supabase if hasattr(db_service, 'supabase') else None
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not available")
+        
+        # Get the contact
+        result = supabase.table("proactive_pending")\
+            .select("*")\
+            .eq("id", request.pending_id)\
+            .execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Contact not found")
+        
+        contact = result.data[0]
+        
+        # Update status
+        supabase.table("proactive_pending")\
+            .update({
+                "status": "answered",
+                "answered_at": datetime.now().isoformat()
+            })\
+            .eq("id", request.pending_id)\
+            .execute()
+        
+        # Generate greeting if it's a call
+        greeting = None
+        if contact["contact_type"] == "call":
+            greeting = proactive_generator.generate_call_greeting(
+                user_id=request.user_id,
+                context=contact.get("context", {})
+            )
+        
+        return {
+            "success": True,
+            "contact_type": contact["contact_type"],
+            "message": contact["message"],
+            "greeting": greeting,
+            "context": contact.get("context", {})
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to answer contact: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/proactive/dismiss")
+async def dismiss_proactive_contact(request: ProactiveAnswerRequest):
+    """Dismiss/miss a proactive contact."""
+    try:
+        supabase = db_service.supabase if hasattr(db_service, 'supabase') else None
+        if not supabase:
+            return {"success": False}
+        
+        supabase.table("proactive_pending")\
+            .update({"status": "missed"})\
+            .eq("id", request.pending_id)\
+            .execute()
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Failed to dismiss contact: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/proactive/trigger")
+async def trigger_proactive_contact(request: ProactiveTriggerRequest):
+    """Manually trigger a proactive contact (for testing)."""
+    try:
+        supabase = db_service.supabase if hasattr(db_service, 'supabase') else None
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not available")
+        
+        # Create a contact decision
+        contact_type = ContactType.CALL if request.contact_type == "call" else ContactType.MESSAGE
+        
+        decision = ContactDecision(
+            should_contact=True,
+            contact_type=contact_type,
+            reason="Manual trigger",
+            context={
+                "window": "manual",
+                "user_mood": "neutral",
+                "is_first_today": False
+            }
+        )
+        
+        # Generate message
+        message = proactive_generator.generate_message(
+            user_id=request.user_id,
+            contact_type=request.contact_type,
+            context=decision.context
+        )
+        decision.message = message
+        
+        # Create pending record
+        scheduler = get_proactive_scheduler()
+        success = await scheduler.trigger_contact(request.user_id, decision)
+        
+        return {
+            "success": success,
+            "contact_type": request.contact_type,
+            "message": message
+        }
+    except Exception as e:
+        logger.error(f"Failed to trigger contact: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==================== RUN ====================

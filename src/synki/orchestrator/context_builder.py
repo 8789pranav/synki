@@ -2,12 +2,12 @@
 Context Builder - Smart, Human-like Context for AI Prompts
 
 KEY FEATURES:
-1. Uses ALL 3 conversation summaries for context
-2. SMART anti-repetition: tracks QUESTIONS asked, not topics
-3. Time + Mood + History based suggestions (not just food!)
-4. Tracks dislikes too (not just favorites)
-5. Natural conversation FLOW - tracks last few exchanges, not just questions
-6. Varied suggestions based on context (activities, not just food!)
+1. PERSONALIZED behavior tracking (happiness/stress triggers)
+2. DYNAMIC response modes (REACT 60%, FOLLOW_UP 25%, NEW_TOPIC 10%, RANDOM 5%)
+3. Topic rotation with tracking
+4. Favorites used ONLY when mood needs cheering
+5. Time-based energy awareness
+6. Human-like randomness
 
 NO extra storage - just smart formatting of existing data!
 """
@@ -19,6 +19,9 @@ from typing import Any
 from dataclasses import dataclass, field
 
 import structlog
+
+# Import personalized context engine
+from .personalized_context import PersonalizedContextEngine, UserBehaviorProfile, SessionIntelligence
 
 logger = structlog.get_logger(__name__)
 
@@ -41,8 +44,17 @@ class PromptContext:
     # Recent chat messages from THIS session (for context continuity)
     recent_chat_messages: list[dict] = field(default_factory=list)
     
-    # Recent summaries from PREVIOUS sessions (ALL 3, with dates)
+    # ACTUAL recent conversations (last 3 sessions with real messages!)
+    recent_conversations: list[dict] = field(default_factory=list)
+    
+    # Recent summaries from PREVIOUS sessions (last 3 sessions) - backup
     recent_summaries: list[dict] = field(default_factory=list)
+    
+    # Quick summary of recent conversations (fallback when no summaries exist)
+    recent_conversations_summary: str = ""
+    
+    # Daily summary (today/yesterday full day context)
+    daily_summary: dict = field(default_factory=dict)
     
     # SMART Anti-repetition (questions, not topics!)
     questions_already_asked: list[str] = field(default_factory=list)
@@ -55,6 +67,11 @@ class PromptContext:
     # User preferences
     likes: dict = field(default_factory=dict)
     dislikes: dict = field(default_factory=dict)
+    
+    # BEHAVIOR INSIGHTS (from short-term profile)
+    happiness_triggers: list[str] = field(default_factory=list)
+    stress_triggers: list[str] = field(default_factory=list)
+    recent_activities: list[dict] = field(default_factory=list)
     
     # Behavior hints
     behavior_hint: str = ""
@@ -135,13 +152,147 @@ class ContextBuilder:
     def __init__(self, supabase_client: Any = None):
         self._supabase = supabase_client
         
-        # Session-level tracking
+        # Session-level tracking (IN-MEMORY - for current session only)
         self._session_questions_asked: dict[str, list[str]] = {}  # user_id -> questions asked
         self._session_facts_mentioned: dict[str, set] = {}  # user_id -> facts mentioned
         self._session_last_question_category: dict[str, str] = {}  # user_id -> last category
         self._session_conversation_flow: dict[str, list[str]] = {}  # user_id -> last 5 topic categories
         
-        logger.info("ContextBuilder initialized (smart conversation flow)")
+        # PERSISTENT tracking loaded from daily_summaries
+        self._loaded_from_db: set[str] = set()  # user_ids that have been loaded
+        
+        logger.info("ContextBuilder initialized (with DB persistence)")
+    
+    async def _load_persisted_questions(self, user_id: str):
+        """
+        Load questions from today's daily_summary when agent restarts.
+        This prevents asking the same questions again!
+        """
+        if user_id in self._loaded_from_db:
+            return  # Already loaded
+        
+        if not self._supabase:
+            self._loaded_from_db.add(user_id)
+            return
+        
+        try:
+            date = datetime.now().strftime("%Y-%m-%d")
+            result = self._supabase.table("daily_summaries")\
+                .select("questions_asked, topics_discussed, last_topic")\
+                .eq("user_id", user_id)\
+                .eq("date", date)\
+                .execute()
+            
+            if result.data:
+                summary = result.data[0]
+                
+                # Load questions already asked today
+                questions = summary.get("questions_asked", [])
+                if questions and isinstance(questions, list):
+                    if user_id not in self._session_questions_asked:
+                        self._session_questions_asked[user_id] = []
+                    self._session_questions_asked[user_id].extend(questions)
+                    logger.info(f"Loaded {len(questions)} questions from daily_summary for {user_id}")
+                
+                # Load topics discussed
+                topics = summary.get("topics_discussed", [])
+                if topics and isinstance(topics, list):
+                    if user_id not in self._session_conversation_flow:
+                        self._session_conversation_flow[user_id] = []
+                    self._session_conversation_flow[user_id].extend(topics[-5:])
+                
+                # Load favorites already mentioned today
+                favorites = summary.get("favorites_mentioned", [])
+                if favorites and isinstance(favorites, list):
+                    if user_id not in self._session_facts_mentioned:
+                        self._session_facts_mentioned[user_id] = set()
+                    self._session_facts_mentioned[user_id].update(favorites)
+                    logger.info(f"Loaded {len(favorites)} favorites from daily_summary for {user_id}")
+                
+                # Load last topic
+                last_topic = summary.get("last_topic", "")
+                if last_topic:
+                    self._session_last_question_category[user_id] = last_topic
+            
+            self._loaded_from_db.add(user_id)
+            
+        except Exception as e:
+            logger.warning(f"Could not load persisted questions: {e}")
+            self._loaded_from_db.add(user_id)
+    
+    async def persist_question_to_db(self, user_id: str, question: str):
+        """Persist a question to daily_summaries so it survives agent restart"""
+        if not self._supabase:
+            return
+        
+        try:
+            date = datetime.now().strftime("%Y-%m-%d")
+            
+            # Check if today's summary exists
+            result = self._supabase.table("daily_summaries")\
+                .select("id, questions_asked")\
+                .eq("user_id", user_id)\
+                .eq("date", date)\
+                .execute()
+            
+            if result.data:
+                # Update existing
+                existing_questions = result.data[0].get("questions_asked", []) or []
+                if question.lower() not in [q.lower() for q in existing_questions]:
+                    existing_questions.append(question)
+                    self._supabase.table("daily_summaries")\
+                        .update({"questions_asked": existing_questions})\
+                        .eq("id", result.data[0]["id"])\
+                        .execute()
+            else:
+                # Create new
+                self._supabase.table("daily_summaries").insert({
+                    "user_id": user_id,
+                    "date": date,
+                    "questions_asked": [question],
+                    "topics_discussed": [],
+                    "activities": [],
+                    "dominant_mood": "neutral"
+                }).execute()
+                
+            logger.debug(f"Persisted question to daily_summary: {question[:30]}...")
+            
+        except Exception as e:
+            logger.warning(f"Could not persist question: {e}")
+    
+    async def persist_favorite_to_db(self, user_id: str, favorite: str):
+        """Persist a mentioned favorite to daily_summaries so it survives agent restart"""
+        if not self._supabase:
+            return
+        
+        # Track in memory immediately
+        if user_id not in self._session_facts_mentioned:
+            self._session_facts_mentioned[user_id] = set()
+        self._session_facts_mentioned[user_id].add(favorite.lower())
+        
+        # Try to persist to DB (column may not exist yet)
+        try:
+            date = datetime.now().strftime("%Y-%m-%d")
+            result = self._supabase.table("daily_summaries")\
+                .select("id, favorites_mentioned")\
+                .eq("user_id", user_id)\
+                .eq("date", date)\
+                .execute()
+            
+            if result.data:
+                existing = result.data[0].get("favorites_mentioned", []) or []
+                if favorite.lower() not in [f.lower() for f in existing]:
+                    existing.append(favorite)
+                    self._supabase.table("daily_summaries")\
+                        .update({"favorites_mentioned": existing})\
+                        .eq("id", result.data[0]["id"])\
+                        .execute()
+                
+            logger.debug(f"Persisted favorite to daily_summary: {favorite}")
+            
+        except Exception as e:
+            # Column might not exist yet - that's okay, in-memory tracking still works
+            logger.debug(f"Could not persist favorite (column may not exist): {e}")
     
     def get_time_context(self) -> tuple[str, str]:
         """Get current time period (just the period, not fixed suggestions)"""
@@ -257,11 +408,15 @@ class ContextBuilder:
             recent_messages: List of recent chat messages from current session
                             [{"role": "user"|"assistant", "content": "..."}]
         """
+        # FIRST: Load persisted questions from DB (so we don't repeat after restart!)
+        await self._load_persisted_questions(user_id)
+        
         context = PromptContext()
         
         # Store recent chat messages (last N messages from this session)
+        # Keep more messages so AI remembers earlier parts of conversation
         if recent_messages:
-            context.recent_chat_messages = recent_messages[-10:]  # Last 10 messages
+            context.recent_chat_messages = recent_messages[-30:]  # Last 30 messages (15 turns)
         
         # 1. Time context
         context.time_of_day, context.time_based_hint = self.get_time_context()
@@ -272,7 +427,7 @@ class ContextBuilder:
             context.user_name = memories.get("name", "Baby")
             context.likes, context.dislikes = self._extract_preferences(memories)
         
-        # 3. Load short-term profile
+        # 3. Load short-term profile WITH BEHAVIOR INSIGHTS
         short_term = await self._get_short_term_profile(user_id)
         if short_term:
             context.current_mood = short_term.get("dominant_mood", "neutral")
@@ -281,12 +436,19 @@ class ContextBuilder:
                 context.current_mood,
                 context.stress_level
             )
+            # Load behavior insights
+            context.happiness_triggers = short_term.get("recent_happiness_triggers", [])
+            context.stress_triggers = short_term.get("recent_stress_triggers", [])
+            context.recent_activities = short_term.get("recent_activities", [])
         
-        # 4. Load ALL 3 recent summaries
+        # 4. Load ACTUAL recent conversations (real messages, not summaries!)
+        context.recent_conversations = await self._get_recent_conversations(user_id)
+        
+        # 4b. Load summaries
         summaries = await self._get_recent_summaries(user_id)
         context.recent_summaries = [
             {
-                "date": s.get("conversation_date", "unknown"),
+                "conversation_date": s.get("conversation_date", "unknown"),
                 "summary": s.get("summary", ""),
                 "topics": s.get("topics", []),
                 "emotions": s.get("emotions_detected", []),
@@ -294,7 +456,14 @@ class ContextBuilder:
             for s in summaries
         ]
         
-        # 5. SMART anti-repetition: track QUESTIONS, not topics
+        # 4c. FALLBACK: If no summaries, create quick summary from recent conversations
+        if not context.recent_summaries and context.recent_conversations:
+            context.recent_conversations_summary = self._create_quick_summary(context.recent_conversations)
+        
+        # 5. Load DAILY summary (today/yesterday context)
+        context.daily_summary = await self._get_daily_summary(user_id)
+        
+        # 6. SMART anti-repetition: track QUESTIONS, not topics
         context.questions_already_asked = self._session_questions_asked.get(user_id, [])
         context.facts_already_mentioned = list(self._session_facts_mentioned.get(user_id, set()))
         context.last_question_category = self._session_last_question_category.get(user_id, "")
@@ -331,6 +500,11 @@ class ContextBuilder:
             # Also add to conversation flow
             self.track_conversation_topic(user_id, question)
     
+    async def track_question_asked_async(self, user_id: str, question: str):
+        """Track a question AND persist to DB (use this for persistence)"""
+        self.track_question_asked(user_id, question)
+        await self.persist_question_to_db(user_id, question)
+    
     def track_fact_mentioned(self, user_id: str, fact: str):
         """Track that a fact was mentioned (e.g., 'favorite movie')"""
         if user_id not in self._session_facts_mentioned:
@@ -363,96 +537,286 @@ class ContextBuilder:
     
     def format_for_prompt(self, context: PromptContext) -> str:
         """
-        Format context for LLM prompt injection.
+        Format context for LLM prompt - DYNAMIC & PERSONALIZED!
         
-        SMART approach: 
-        - Track conversation FLOW (not just individual questions)
-        - Suggest based on mood + time + history
-        - Maintain natural conversation continuity
+        Uses random response modes to feel human-like.
         """
+        from datetime import datetime
         parts = []
         
-        # =====================================================================
-        # USER INFO + MOOD
-        # =====================================================================
-        parts.append(f"## About {context.user_name}")
-        parts.append(f"Mood: {context.current_mood} | Stress: {context.stress_level} | {context.time_based_hint}")
+        # ========== DYNAMIC RESPONSE MODE (human-like randomness) ==========
+        # Pick mode based on mood and session progress
+        topics_done = list(context.conversation_flow) if context.conversation_flow else []
+        mood = context.current_mood
         
-        # =====================================================================
-        # RECENT CHAT (current session - for continuity)
-        # =====================================================================
-        if context.recent_chat_messages:
-            parts.append("\n## Recent Chat (CONTINUE this conversation naturally!):")
-            for msg in context.recent_chat_messages[-6:]:  # Last 6 messages for context
-                role = "User" if msg.get("role") == "user" else "You"
-                content = msg.get("content", "")[:150]  # Truncate for prompt space
-                if len(msg.get("content", "")) > 150:
-                    content += "..."
-                parts.append(f"   {role}: {content}")
+        # Adjust probabilities based on context
+        if mood in ["sad", "stressed", "tired"]:
+            weights = {"REACT": 60, "COMFORT": 20, "SHARE": 10, "RECALL": 10}
+        elif mood in ["happy", "excited"]:
+            weights = {"REACT": 35, "TEASE": 15, "FLIRT": 15, "FOLLOW_UP": 15, "SHARE": 10, "NEW_TOPIC": 10}
+        elif mood in ["bored"]:
+            weights = {"NEW_TOPIC": 30, "TEASE": 20, "CURIOUS": 20, "SHARE": 15, "REACT": 15}
+        elif len(topics_done) >= 3:
+            weights = {"REACT": 50, "TEASE": 15, "SHARE": 15, "RECALL": 10, "FLIRT": 10}
+        else:
+            weights = {"REACT": 40, "FOLLOW_UP": 20, "CURIOUS": 15, "NEW_TOPIC": 10, "TEASE": 10, "SHARE": 5}
         
-        # =====================================================================
-        # CONVERSATION FLOW (what topics we've covered)
-        # =====================================================================
-        if context.conversation_flow:
-            flow_str = " → ".join(context.conversation_flow[-5:])
-            parts.append(f"\n📊 Conversation flow: {flow_str}")
-            parts.append(f"   → Next topic should be DIFFERENT from: {context.conversation_flow[-1] if context.conversation_flow else 'none'}")
+        # Random pick
+        choices = []
+        for mode, weight in weights.items():
+            choices.extend([mode] * weight)
+        response_mode = random.choice(choices)
         
-        # =====================================================================
-        # BEHAVIOR GUIDANCE
-        # =====================================================================
-        if context.behavior_hint:
-            parts.append(f"\n🎯 Behavior: {context.behavior_hint}")
+        # ========== HEADER ==========
+        now = datetime.now()
+        hour = now.hour
+        time_emoji = "🌙" if hour >= 22 or hour < 6 else "🕐"
+        parts.append(f"{time_emoji} {now.strftime('%H:%M')} | User: {context.user_name} | Mood: {mood}")
         
-        # =====================================================================
-        # SMART CONTEXTUAL SUGGESTION (mood + time + history based)
-        # =====================================================================
-        if context.contextual_suggestion:
-            parts.append(f"\n{context.contextual_suggestion}")
+        # ========== RESPONSE MODE INSTRUCTION ==========
+        parts.append(f"\n🎲 THIS TURN: {response_mode}")
         
-        # =====================================================================
-        # PREVIOUS SESSIONS (summaries for long-term context)
-        # =====================================================================
+        if response_mode == "REACT":
+            parts.append("   → Short natural reaction, NO question")
+            parts.append("   → Like: 'oho 😏', 'haan yaar', 'achaaa', 'hmm nice', 'sachi?', 'phir?'")
+        
+        elif response_mode == "TEASE":
+            teases = [
+                "playfully tease them about something they said",
+                "joke about their habits",
+                "fake jealousy or possessiveness (cute way)",
+                "make fun of something lovingly",
+            ]
+            parts.append(f"   → {random.choice(teases)}")
+            parts.append("   → Keep it light & loving, end with 😏 or 😜")
+        
+        elif response_mode == "FLIRT":
+            flirts = [
+                "give a cute compliment",
+                "say something sweet about missing them",
+                "be a little cheesy but adorable",
+                "express affection naturally",
+            ]
+            parts.append(f"   → {random.choice(flirts)}")
+            parts.append("   → Not cringe, just sweet. Use 💕 or ☺️")
+        
+        elif response_mode == "SHARE":
+            shares = [
+                "share what YOU are doing right now",
+                "tell them about YOUR day briefly",
+                "share a random thought you had",
+                "mention something you want to do together",
+            ]
+            parts.append(f"   → {random.choice(shares)}")
+            parts.append("   → Make it feel like real sharing, not scripted")
+        
+        elif response_mode == "CURIOUS":
+            parts.append("   → Show genuine curiosity about what they said")
+            parts.append("   → Ask 'kyun?', 'kaise?', 'phir?', 'aur kya hua?'")
+        
+        elif response_mode == "RECALL":
+            # Reference something from memory
+            recall_items = []
+            if context.likes.get("movie"):
+                recall_items.append(f"mention their fav movie: {context.likes['movie']}")
+            if context.likes.get("food"):
+                recall_items.append(f"mention their fav food: {context.likes['food']}")
+            if context.likes.get("place"):
+                recall_items.append(f"mention a place they like: {context.likes['place']}")
+            if recall_items:
+                parts.append(f"   → {random.choice(recall_items)}")
+            else:
+                parts.append("   → Reference something from previous conversation")
+        
+        elif response_mode == "COMFORT":
+            parts.append("   → Be gentle and supportive")
+            parts.append("   → Offer emotional support, no advice unless asked")
+            if hasattr(context, 'happiness_triggers') and context.happiness_triggers:
+                parts.append(f"   → Maybe suggest: {context.happiness_triggers[0]}")
+        
+        elif response_mode == "FOLLOW_UP":
+            parts.append("   → Reference previous talks naturally")
+            parts.append("   → Connect to something they mentioned before")
+        
+        elif response_mode == "NEW_TOPIC":
+            available = [t for t in ["movie", "weekend", "travel", "friend", "hobby", "music", "food plans"] if t not in topics_done]
+            if available:
+                topic = random.choice(available)
+                parts.append(f"   → Ask about: {topic}")
+            else:
+                parts.append("   → Find something new to discuss")
+        
+        # ========== BEHAVIOR INSIGHTS (from short-term profile) ==========
+        if hasattr(context, 'happiness_triggers') and context.happiness_triggers and mood in ["sad", "bored", "stressed"]:
+            triggers = context.happiness_triggers[:2]
+            parts.append(f"\n💡 Cheer up topics: {', '.join(triggers)}")
+        
+        # ========== PREVIOUS SESSIONS (last 3 with topics + facts) ==========
+        has_sessions = False
+        
+        # From conversation_summaries (proper session summaries)
         if context.recent_summaries:
-            parts.append("\n## Previous Conversations (for reference):")
-            for i, s in enumerate(context.recent_summaries, 1):
-                date = s["date"]
-                summary = s["summary"]
-                emotions = ", ".join(s.get("emotions", [])) or "neutral"
-                parts.append(f"   [{date}] {summary[:100]}...")
+            parts.append("\n📜 PREVIOUS SESSIONS:")
+            for i, s in enumerate(context.recent_summaries[:3], 1):
+                date = s.get("conversation_date", "?")[:10]
+                topics = s.get("topics", [])
+                summary = s.get("summary", "")
+                
+                parts.append(f"   Session {i} ({date}):")
+                if topics:
+                    parts.append(f"   Topics: {', '.join(topics[:5])}")
+                
+                # Show FULL summary with specifics (Foods:, Places:, Plans:, etc.)
+                if summary and len(summary) > 10:
+                    # Split by | to show each part
+                    summary_parts = summary.split(" | ")
+                    for sp in summary_parts[:4]:  # Show up to 4 parts
+                        if sp.strip():
+                            parts.append(f"   {sp.strip()[:100]}")
+            has_sessions = True
+        
+        # From daily_summaries (today's session info) 
+        if hasattr(context, 'daily_summary') and context.daily_summary:
+            ds = context.daily_summary
+            parts.append("\n📅 TODAY'S CONVERSATION:")
             
-            parts.append("   ✅ You CAN follow up on these naturally")
+            # Topics discussed
+            if ds.get("topics_discussed"):
+                parts.append(f"   Topics: {', '.join(ds['topics_discussed'][:5])}")
+            
+            # Key moments/highlights
+            if ds.get("highlights"):
+                parts.append(f"   Key moments: {' | '.join(ds['highlights'][:3])}")
+            
+            # Activities user did
+            if ds.get("activities"):
+                parts.append(f"   User did: {', '.join(ds['activities'][:4])}")
+            
+            # Open topics/concerns
+            if ds.get("concerns"):
+                parts.append(f"   Open topics: {', '.join(ds['concerns'][:2])}")
+            
+            # Last thing discussed
+            if ds.get("conversation_ended_on"):
+                ended = ds.get("conversation_ended_on", "")[:60]
+                parts.append(f"   Last: \"{ended}\"")
         
-        # =====================================================================
-        # PREFERENCES (use when relevant)
-        # =====================================================================
-        if context.likes or context.dislikes:
-            parts.append("\n## Preferences:")
-            if context.likes:
-                likes_list = [f"{k}={v}" for k, v in list(context.likes.items())[:5]]
-                parts.append(f"   👍 {', '.join(likes_list)}")
-            if context.dislikes:
-                dislikes_list = [f"{k}={v}" for k, v in list(context.dislikes.items())[:5]]
-                parts.append(f"   👎 AVOID: {', '.join(dislikes_list)}")
+        # ========== SPECIFICS MENTIONED (NEW - names, places, movies) ==========
+        # Extract from likes/memories for quick reference
+        if context.likes:
+            specifics = []
+            if context.likes.get("movie"):
+                specifics.append(f"movie: {context.likes['movie']}")
+            if context.likes.get("food"):
+                specifics.append(f"food: {context.likes['food']}")
+            if context.likes.get("place"):
+                specifics.append(f"place: {context.likes['place']}")
+            if specifics:
+                parts.append(f"\n🎯 REMEMBER: {', '.join(specifics)}")
         
-        # =====================================================================
-        # ANTI-REPETITION (exact questions asked)
-        # =====================================================================
-        if context.questions_already_asked:
-            parts.append(f"\n🚫 Don't repeat these questions:")
-            for q in context.questions_already_asked[-5:]:
-                parts.append(f"   ❌ \"{q}\"")
+        # ========== RECENT TURNS (actual messages) ==========
+        # From current session messages (real-time)
+        if context.recent_chat_messages:
+            parts.append("\n💬 RECENT TURNS:")
+            for msg in context.recent_chat_messages[-6:]:  # Last 3 turns
+                role = "User" if msg.get("role") == "user" else "You"
+                content = msg.get("content", "")[:50]
+                parts.append(f"   {role}: {content}...")
+        # Fallback: show last questions from daily_summary if no live messages
+        elif hasattr(context, 'daily_summary') and context.daily_summary:
+            questions = context.daily_summary.get("questions_asked", [])
+            if questions:
+                parts.append("\n💬 YOUR LAST MESSAGES:")
+                for q in questions[-3:]:  # Last 3 questions you asked
+                    parts.append(f"   • {q[:60]}...")
         
-        # =====================================================================
-        # NATURAL CONVERSATION RULES
-        # =====================================================================
-        parts.append("""
-## 🧠 BE NATURAL:
-1. CONTINUE the current conversation flow - don't jump randomly
-2. If user is talking about work, stay on work for 2-3 exchanges before switching
-3. Don't ask same category question consecutively (food→food BAD, food→mood GOOD)
-4. ONE question per response max
-5. Be a caring girlfriend who LISTENS, not interrogates!""")
+        # ========== BUILD BLOCKED LIST - SPECIFIC TOPICS ==========
+        # Extract SPECIFIC topics from questions (not generic categories)
+        specific_topics = set()
+        
+        # Keywords to extract as specific blocked topics
+        topic_keywords = {
+            # Food specific
+            "पनीर": "paneer", "कढ़ाई": "kadhai paneer", "खाना": "khana/food",
+            "रेस्टोरेंट": "restaurant", "lunch": "lunch", "dinner": "dinner",
+            # Travel specific  
+            "यात्रा": "trip/yatra", "घूमने": "ghumne/travel", "ट्रिप": "trip",
+            # Work specific
+            "मीटिंग": "meeting", "काम": "kaam/work", "office": "office",
+            # Entertainment
+            "IPL": "IPL", "फिल्म": "film", "movie": "movie",
+            # Daily
+            "दिन": "din/day", "सुबह": "morning", "रात": "night",
+            # Feelings
+            "थक": "tired", "neend": "sleep",
+        }
+        
+        # Scan questions for specific keywords
+        for q in context.questions_already_asked[-20:]:
+            q_text = q.lower()
+            for hindi_key, english_name in topic_keywords.items():
+                if hindi_key.lower() in q_text:
+                    specific_topics.add(english_name)
+        
+        # Also add from daily_summary highlights (things ALREADY discussed)
+        if hasattr(context, 'daily_summary') and context.daily_summary:
+            highlights = context.daily_summary.get("highlights", [])
+            for h in highlights[:3]:
+                # Add shortened version of highlight
+                short = h[:25] if len(h) > 25 else h
+                specific_topics.add(short)
+        
+        blocked_favorites = list(context.facts_already_mentioned)[:4] if context.facts_already_mentioned else []
+        
+        # Show BLOCKED list with SPECIFIC items
+        if specific_topics or blocked_favorites:
+            parts.append("\n🚫 ALREADY DISCUSSED (don't repeat!):")
+            if specific_topics:
+                # Show top 6 specific topics
+                topics_list = sorted(specific_topics)[:6]
+                parts.append(f"   {', '.join(topics_list)}")
+            if blocked_favorites:
+                parts.append(f"   Favorites mentioned: {', '.join(blocked_favorites)}")
+        
+        # ========== RULES (MAKE AI FOLLOW MODE!) ==========
+        parts.append("\n" + "="*40)
+        parts.append(f"⚠️ YOU MUST DO THIS → {response_mode}")
+        parts.append("="*40)
+        
+        if response_mode == "REACT":
+            parts.append("✓ Say something like: 'achaaa', 'ohh nice', 'haan yaar', 'sachi?'")
+            parts.append("✗ DO NOT ask any question!")
+        elif response_mode == "TEASE":
+            parts.append("✓ Tease them playfully, be cheeky, joke around")
+            parts.append("✓ End with 😏 or 😜")
+        elif response_mode == "FLIRT":
+            parts.append("✓ Say something sweet/cute/romantic")
+            parts.append("✓ Use 💕 or ☺️")
+        elif response_mode == "SHARE":
+            parts.append("✓ Tell them what YOU are doing/thinking")
+            parts.append("✓ Share about yourself, not ask about them")
+        elif response_mode == "CURIOUS":
+            parts.append("✓ Ask follow-up: 'kyun?', 'kaise?', 'phir kya hua?'")
+            parts.append("✓ Show genuine interest in their story")
+        elif response_mode == "COMFORT":
+            parts.append("✓ Be gentle and supportive")
+            parts.append("✓ Don't give advice, just listen")
+        elif response_mode == "RECALL":
+            parts.append("✓ Mention something from their past/favorites")
+            parts.append("✓ Connect to previous conversations")
+        elif response_mode == "FOLLOW_UP":
+            parts.append("✓ Reference something from previous session")
+            parts.append("✓ Show you remember what they said before")
+        elif response_mode == "NEW_TOPIC":
+            parts.append("✓ Ask about something NEW not in blocked list")
+            parts.append("✓ One question only!")
+        
+        if specific_topics and response_mode in ["CURIOUS", "FOLLOW_UP", "NEW_TOPIC"]:
+            skip_list = sorted(specific_topics)[:4]
+            parts.append(f"✗ SKIP: {', '.join(skip_list)}")
+        
+        if hour >= 22 or hour < 6:
+            parts.append("🌙 Late night - be soft, short responses")
         
         return "\n".join(parts)
     
@@ -506,6 +870,96 @@ class ContextBuilder:
         except Exception as e:
             logger.error(f"Failed to get summaries: {e}")
             return []
+    
+    async def _get_recent_conversations(self, user_id: str) -> list[dict]:
+        """
+        Get ACTUAL recent conversations (real messages!) from last 3 days.
+        This gives AI real context to follow up on specific things like
+        "matar chap", "office meeting", "weekend plans" etc.
+        """
+        if not self._supabase:
+            return []
+        
+        try:
+            from datetime import datetime, timedelta
+            three_days_ago = (datetime.now() - timedelta(days=3)).isoformat()
+            
+            # Get last 50 messages from recent days (more context!)
+            result = self._supabase.table("chat_history")\
+                .select("role, content, created_at")\
+                .eq("user_id", user_id)\
+                .gte("created_at", three_days_ago)\
+                .order("created_at", desc=True)\
+                .limit(50)\
+                .execute()
+            
+            if not result.data:
+                return []
+            
+            # Group by date
+            conversations_by_date = {}
+            for msg in reversed(result.data):  # Oldest first
+                date = msg["created_at"][:10]  # YYYY-MM-DD
+                if date not in conversations_by_date:
+                    conversations_by_date[date] = []
+                conversations_by_date[date].append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+            
+            # Return last 3 days with messages (8 messages each for more context)
+            recent_convos = []
+            for date in sorted(conversations_by_date.keys(), reverse=True)[:3]:
+                recent_convos.append({
+                    "date": date,
+                    "messages": conversations_by_date[date][-8:]  # Last 8 messages per day!
+                })
+            
+            logger.info(f"📜 Loaded {len(recent_convos)} days of recent conversations")
+            return recent_convos
+            
+        except Exception as e:
+            logger.error(f"Failed to get recent conversations: {e}")
+            return []
+    
+    async def _get_daily_summary(self, user_id: str) -> dict:
+        """Get most recent daily summary (today or yesterday)"""
+        if not self._supabase:
+            return {}
+        
+        try:
+            from datetime import date, timedelta
+            today = date.today()
+            yesterday = today - timedelta(days=1)
+            
+            # Try TODAY first, then YESTERDAY
+            for check_date in [today, yesterday]:
+                result = self._supabase.table("daily_summaries")\
+                    .select("*")\
+                    .eq("user_id", user_id)\
+                    .eq("date", check_date.isoformat())\
+                    .execute()
+                
+                if result.data:
+                    data = result.data[0]
+                    logger.info(f"📅 Loaded daily summary for {check_date}")
+                    return {
+                        "date": data.get("date"),
+                        "dominant_mood": data.get("dominant_mood", "neutral"),
+                        "topics_discussed": data.get("topics_discussed", []),
+                        "questions_asked": data.get("questions_asked", []),
+                        "activities": data.get("activities", []),
+                        "highlights": data.get("highlights", []),
+                        "concerns": data.get("concerns", []),
+                        "last_topic": data.get("last_topic"),
+                        "conversation_ended_on": data.get("conversation_ended_on"),
+                    }
+            
+            logger.info(f"📅 No daily summary found for {today} or {yesterday}")
+            return {}
+        except Exception as e:
+            logger.error(f"Failed to get daily summary: {e}")
+            return {}
     
     def _extract_preferences(self, memories: dict) -> tuple[dict, dict]:
         """Extract likes AND dislikes from memories"""
@@ -661,4 +1115,117 @@ class ContextBuilder:
                     break
         
         return questions[:3]  # Max 3 suggestions
-        return questions[:3]  # Max 3 suggestions
+    
+    def _create_quick_summary(self, conversations: list[dict]) -> str:
+        """
+        Create a quick summary from raw conversation messages.
+        Used as fallback when no LLM summaries exist.
+        """
+        if not conversations:
+            return ""
+        
+        # Collect all user messages
+        user_messages = []
+        for conv in conversations:
+            for msg in conv.get("messages", []):
+                if msg.get("role") == "user":
+                    user_messages.append(msg.get("content", ""))
+        
+        if not user_messages:
+            return ""
+        
+        all_text = " ".join(user_messages).lower()
+        
+        # Extract key items
+        summary_parts = []
+        
+        # Food items
+        food_words = ["कढ़ाई पनीर", "पनीर", "बिरयानी", "खाना", "lunch", "dinner", "chai", 
+                      "kadhai", "paneer", "biryani", "food", "restaurant", "रेस्टोरेंट"]
+        found_foods = [f for f in food_words if f in all_text]
+        if found_foods:
+            summary_parts.append(f"Food: {', '.join(found_foods[:3])}")
+        
+        # Places
+        place_words = ["करवाली", "मनाली", "office", "ऑफिस", "घर", "manali", "delhi"]
+        found_places = [p for p in place_words if p in all_text]
+        if found_places:
+            summary_parts.append(f"Places: {', '.join(found_places[:3])}")
+        
+        # Activities/Plans
+        if "जाने वाले" in all_text or "करने वाले" in all_text or "try" in all_text:
+            summary_parts.append("Had plans to do something")
+        if "meeting" in all_text or "मीटिंग" in all_text:
+            summary_parts.append("Had meeting")
+        if "trip" in all_text or "यात्रा" in all_text:
+            summary_parts.append("Discussed trip plans")
+        
+        # If found specific items
+        if "कढ़ाई पनीर" in all_text or "kadhai paneer" in all_text:
+            summary_parts.append("Discussed trying kadhai paneer")
+        if "करवाली" in all_text or "karwali" in all_text:
+            summary_parts.append("Mentioned Karwali restaurant")
+        
+        if summary_parts:
+            return " | ".join(summary_parts)
+        else:
+            # Return first few user messages as context
+            return f"Recent: {user_messages[0][:100]}..."
+    
+    def _extract_key_items_from_conversations(self, conversations: list[dict]) -> list[str]:
+        """
+        Extract KEY SPECIFIC items from raw conversations.
+        Food, places, activities, plans - no filler!
+        """
+        import re
+        key_items = []
+        
+        # Patterns to extract specific things
+        food_patterns = [
+            r'(कढ़ाई पनीर|पनीर बटर मसाला|मटर चाप|बिरयानी|मैगी|दाल|रोटी|चावल|समोसा|चाय|कॉफी)',
+            r'(kadhai paneer|paneer|biryani|maggi|dal|roti|samosa|chai|coffee|matar chap)',
+        ]
+        place_patterns = [
+            r'(करवाली|मनाली|दिल्ली|मुंबई|ऑफिस|घर|रेस्टोरेंट)',
+            r'(karwali|manali|delhi|mumbai|office|home|restaurant)',
+        ]
+        activity_patterns = [
+            r'(मीटिंग|ट्रिप|यात्रा|फिल्म|मूवी|खाना|आराम)',
+            r'(meeting|trip|travel|movie|film|food|rest)',
+        ]
+        
+        all_text = ""
+        for conv in conversations:
+            for msg in conv.get("messages", []):
+                if msg.get("role") == "user":
+                    all_text += " " + msg.get("content", "")
+        
+        all_text_lower = all_text.lower()
+        
+        # Extract foods
+        for pattern in food_patterns:
+            matches = re.findall(pattern, all_text, re.IGNORECASE)
+            for m in matches:
+                item = f"Food mentioned: {m}"
+                if item not in key_items:
+                    key_items.append(item)
+        
+        # Extract places
+        for pattern in place_patterns:
+            matches = re.findall(pattern, all_text, re.IGNORECASE)
+            for m in matches:
+                item = f"Place: {m}"
+                if item not in key_items:
+                    key_items.append(item)
+        
+        # Look for plans (keywords)
+        if "जाने वाले" in all_text or "करने वाले" in all_text or "try" in all_text_lower:
+            key_items.append("Had plans to try something")
+        
+        if "कढ़ाई पनीर" in all_text or "kadhai" in all_text_lower:
+            key_items.append("Discussed trying kadhai paneer")
+        
+        if "रेस्टोरेंट" in all_text or "restaurant" in all_text_lower:
+            key_items.append("Talked about going to restaurant")
+        
+        return key_items[:8]

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synki Notification Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #2d1f4e);
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, #ff6b9d, #7c4dff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .card h2 {
+            margin-bottom: 15px;
+            color: #ff6b9d;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #ff6b9d, #e91e63);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+
+        .btn:hover { transform: scale(1.05); }
+
+        .log {
+            background: #0a0a15;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .log-success { color: #4caf50; }
+        .log-error { color: #f44336; }
+        .log-info { color: #2196f3; }
+        .log-warn { color: #ff9800; }
+
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+
+        .status-ok { background: #4caf50; }
+        .status-error { background: #f44336; }
+        .status-pending { background: #ff9800; }
+
+        input {
+            padding: 12px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.3);
+            color: white;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        /* ===== INCOMING CALL OVERLAY ===== */
+        .incoming-call-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .hidden { display: none !important; }
+
+        .call-avatar-container {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        .call-avatar {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff6b9d, #ff8a65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            box-shadow: 0 10px 40px rgba(255, 107, 157, 0.4);
+            position: relative;
+            z-index: 2;
+        }
+
+        .pulse-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 107, 157, 0.5);
+            animation: callPulse 1.5s ease-out infinite;
+        }
+        .pulse-ring:nth-child(2) { animation-delay: 0.5s; }
+        .pulse-ring:nth-child(3) { animation-delay: 1s; }
+
+        @keyframes callPulse {
+            0% { width: 150px; height: 150px; opacity: 1; }
+            100% { width: 250px; height: 250px; opacity: 0; }
+        }
+
+        .call-caller-name {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .call-status-text {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 10px;
+        }
+
+        .call-message {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.6);
+            font-style: italic;
+            margin-bottom: 50px;
+            max-width: 300px;
+            text-align: center;
+        }
+
+        .call-buttons {
+            display: flex;
+            gap: 60px;
+        }
+
+        .call-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .call-btn:hover { transform: scale(1.1); }
+
+        .decline-call-btn {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+            color: white;
+        }
+
+        .accept-call-btn {
+            background: linear-gradient(135deg, #4caf50, #388e3c);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 Synki Notification Debug</h1>
+
+        <!-- Step 1: API Status -->
+        <div class="card">
+            <h2>Step 1: API Status</h2>
+            <button class="btn btn-primary" onclick="checkAPI()">Check API</button>
+            <span id="apiStatus" class="status status-pending">Not checked</span>
+        </div>
+
+        <!-- Step 2: User ID -->
+        <div class="card">
+            <h2>Step 2: User ID</h2>
+            <input type="text" id="userId" value="f3fe2091-63a5-4a24-89ba-0788fc4e12e4" placeholder="Enter user ID">
+            <button class="btn btn-secondary" onclick="checkPending()">Check Pending Calls</button>
+            <div id="pendingInfo" style="margin-top: 10px;"></div>
+        </div>
+
+        <!-- Step 3: Trigger Call -->
+        <div class="card">
+            <h2>Step 3: Trigger a Call</h2>
+            <button class="btn btn-primary" onclick="triggerCall()">📞 Trigger Incoming Call</button>
+            <button class="btn btn-secondary" onclick="triggerMessage()">💬 Trigger Message</button>
+            <div id="triggerResult" style="margin-top: 10px;"></div>
+        </div>
+
+        <!-- Step 4: Show Overlay -->
+        <div class="card">
+            <h2>Step 4: Test Overlay UI</h2>
+            <button class="btn btn-primary" onclick="showTestOverlay()">Show Call Overlay</button>
+            <button class="btn btn-secondary" onclick="hideOverlay()">Hide Overlay</button>
+        </div>
+
+        <!-- Debug Log -->
+        <div class="card">
+            <h2>📋 Debug Log</h2>
+            <button class="btn btn-secondary" onclick="clearLog()">Clear</button>
+            <div id="log" class="log"></div>
+        </div>
+    </div>
+
+    <!-- Incoming Call Overlay -->
+    <div class="incoming-call-overlay hidden" id="incomingCallOverlay">
+        <div class="call-avatar-container">
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring"></div>
+            <div class="call-avatar">💕</div>
+        </div>
+        <div class="call-caller-name">Synki</div>
+        <div class="call-status-text">Incoming call...</div>
+        <div class="call-message" id="callMessage">Miss kar rahi thi tumhe...</div>
+        <div class="call-buttons">
+            <button class="call-btn decline-call-btn" onclick="declineCall()">✕</button>
+            <button class="call-btn accept-call-btn" onclick="acceptCall()">📞</button>
+        </div>
+    </div>
+
+    <!-- Ringtone -->
+    <audio id="ringtone" loop>
+        <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let currentPending = null;
+
+        // Log function
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        // Step 1: Check API
+        async function checkAPI() {
+            log('Checking API connection...');
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                if (response.ok) {
+                    document.getElementById('apiStatus').className = 'status status-ok';
+                    document.getElementById('apiStatus').textContent = '✓ Connected';
+                    log('API is healthy!', 'success');
+                } else {
+                    throw new Error(`Status ${response.status}`);
+                }
+            } catch (e) {
+                document.getElementById('apiStatus').className = 'status status-error';
+                document.getElementById('apiStatus').textContent = '✗ Failed';
+                log(`API check failed: ${e.message}`, 'error');
+            }
+        }
+
+        // Step 2: Check Pending
+        async function checkPending() {
+            const userId = document.getElementById('userId').value;
+            log(`Checking pending calls for user: ${userId}`);
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/proactive/pending?user_id=${userId}`);
+                const data = await response.json();
+                
+                log(`Response: ${JSON.stringify(data)}`, 'info');
+                
+                const infoEl = document.getElementById('pendingInfo');
+                if (data.pending && data.pending.length > 0) {
+                    infoEl.innerHTML = `<div style="color: #4caf50;">✓ Found ${data.count} pending call(s)!</div>`;
+                    data.pending.forEach((p, i) => {
+                        infoEl.innerHTML += `<div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                            <strong>#${i+1}</strong><br>
+                            Type: ${p.contact_type}<br>
+                            Message: ${p.message}<br>
+                            ID: ${p.id}
+                        </div>`;
+                    });
+                    currentPending = data.pending[0];
+                    log(`First pending: ${data.pending[0].message}`, 'success');
+                } else {
+                    infoEl.innerHTML = '<div style="color: #ff9800;">No pending calls</div>';
+                    log('No pending calls found', 'warn');
+                }
+            } catch (e) {
+                log(`Error checking pending: ${e.message}`, 'error');
+                document.getElementById('pendingInfo').innerHTML = `<div style="color: #f44336;">Error: ${e.message}</div>`;
+            }
+        }
+
+        // Step 3: Trigger Call
+        async function triggerCall() {
+            const userId = document.getElementById('userId').value;
+            log(`Triggering call for user: ${userId}`);
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/proactive/trigger`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, contact_type: 'call' })
+                });
+                const data = await response.json();
+                
+                log(`Trigger response: ${JSON.stringify(data)}`, data.success ? 'success' : 'error');
+                
+                document.getElementById('triggerResult').innerHTML = data.success 
+                    ? `<div style="color: #4caf50;">✓ Call triggered! Message: "${data.message}"</div>`
+                    : `<div style="color: #f44336;">✗ Failed: ${JSON.stringify(data)}</div>`;
+                
+                if (data.success) {
+                    log('Call triggered! Now showing overlay...', 'success');
+                    // Auto-check pending and show overlay
+                    setTimeout(async () => {
+                        await checkPending();
+                        if (currentPending) {
+                            showOverlay(currentPending.message);
+                        }
+                    }, 500);
+                }
+            } catch (e) {
+                log(`Error triggering call: ${e.message}`, 'error');
+                document.getElementById('triggerResult').innerHTML = `<div style="color: #f44336;">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function triggerMessage() {
+            const userId = document.getElementById('userId').value;
+            log(`Triggering message for user: ${userId}`);
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/proactive/trigger`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, contact_type: 'message' })
+                });
+                const data = await response.json();
+                log(`Message trigger response: ${JSON.stringify(data)}`, data.success ? 'success' : 'error');
+            } catch (e) {
+                log(`Error: ${e.message}`, 'error');
+            }
+        }
+
+        // Step 4: Show/Hide Overlay
+        function showTestOverlay() {
+            showOverlay('Test message - Baby! Call pe aao na 💕');
+        }
+
+        function showOverlay(message) {
+            log(`Showing overlay with message: ${message}`);
+            document.getElementById('callMessage').textContent = message;
+            document.getElementById('incomingCallOverlay').classList.remove('hidden');
+            
+            // Play ringtone
+            const ringtone = document.getElementById('ringtone');
+            ringtone.volume = 0.5;
+            ringtone.play().catch(e => log(`Ringtone blocked: ${e.message}`, 'warn'));
+            
+            log('Overlay shown!', 'success');
+        }
+
+        function hideOverlay() {
+            log('Hiding overlay');
+            document.getElementById('incomingCallOverlay').classList.add('hidden');
+            document.getElementById('ringtone').pause();
+            document.getElementById('ringtone').currentTime = 0;
+        }
+
+        function acceptCall() {
+            log('Call accepted!', 'success');
+            hideOverlay();
+            alert('Call accepted! In the real app, this would start a voice chat.');
+        }
+
+        function declineCall() {
+            log('Call declined', 'warn');
+            hideOverlay();
+        }
+
+        // Initial checks
+        window.onload = () => {
+            log('Page loaded - starting checks...');
+            checkAPI();
+        };
+    </script>
+</body>
+</html>

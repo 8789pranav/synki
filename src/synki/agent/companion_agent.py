@@ -64,6 +64,7 @@ from ..orchestrator.user_profile import (
     LongTermProfile,
 )
 from ..orchestrator.context_builder import ContextBuilder
+from ..orchestrator.smart_memory import SmartMemoryService
 
 load_dotenv(".env.local")
 
@@ -134,6 +135,9 @@ class CompanionAssistant(Agent):
         self.user_id = user_id
         self.session_id = session_id
         
+        # Smart Memory Service for daily summaries
+        self.smart_memory = SmartMemoryService(supabase_client=supabase) if supabase else None
+        
         # Track conversation state
         self.last_emotion = EmotionState.NEUTRAL
         self.last_intent = IntentType.CASUAL_CHAT
@@ -142,6 +146,10 @@ class CompanionAssistant(Agent):
         
         # Conversation buffer for session summary (in-memory copy)
         self._conversation_buffer: list[dict] = []
+        
+        # Track last user and assistant messages for daily summary
+        self._last_user_message: str = ""
+        self._last_assistant_message: str = ""
         
         # Build system instructions
         instructions = self._build_instructions()
@@ -157,6 +165,53 @@ class CompanionAssistant(Agent):
             has_profile_service=self.profile_service is not None,
             has_ctx_builder=self.ctx_builder is not None,
         )
+        
+        # PRE-LOAD recent chat history (critical for continuity!)
+        self._preload_recent_history()
+    
+    def _preload_recent_history(self):
+        """
+        Load recent chat history from database to:
+        1. Pre-populate conversation buffer
+        2. Initialize anti-repetition tracking
+        3. Know what was discussed recently
+        """
+        if not supabase or not self.user_id:
+            return
+            
+        try:
+            # Load last 20 messages from chat_history
+            result = supabase.table("chat_history")\
+                .select("role, content, created_at")\
+                .eq("user_id", self.user_id)\
+                .order("created_at", desc=True)\
+                .limit(20)\
+                .execute()
+            
+            if result.data:
+                # Reverse to get chronological order
+                messages = list(reversed(result.data))
+                
+                for msg in messages:
+                    self._conversation_buffer.append({
+                        "role": msg["role"],
+                        "text": msg["content"],
+                        "turn": 0,  # Previous session
+                    })
+                    
+                    # Track questions from assistant (for anti-repetition)
+                    if self.ctx_builder and msg["role"] == "assistant" and "?" in msg["content"]:
+                        sentences = msg["content"].replace("!", ".").replace("।", ".").split(".")
+                        for sentence in sentences:
+                            if "?" in sentence:
+                                question = sentence.strip()
+                                if question:
+                                    self.ctx_builder.track_question_asked(self.user_id, question)
+                
+                logger.info(f"📚 Pre-loaded {len(messages)} messages from chat history")
+                logger.info(f"📊 Pre-tracked {len(self.ctx_builder._session_questions_asked.get(self.user_id, []))} questions for anti-repetition")
+        except Exception as e:
+            logger.warning(f"Failed to preload history: {e}")
     
     def _save_message_sync(self, role: str, content: str, emotion: str | None = None) -> bool:
         """
@@ -503,7 +558,28 @@ async def on_session_end(ctx: agents.JobContext):
             )
             logger.info("✅ Conversation summary created!")
         
-        # 3. Reset anti-repetition tracking for this user
+        # 3. FINALIZE DAILY SUMMARY (LLM-generated highlights + concerns)
+        logger.info("📅 Finalizing daily summary...")
+        try:
+            # Get last user message
+            last_user_msg = ""
+            for msg in reversed(conversation_buffer):
+                if msg.get("role") == "user":
+                    last_user_msg = msg.get("text", "")[:100]
+                    break
+            
+            # Use SmartMemoryService to finalize (with LLM summary)
+            smart_memory = SmartMemoryService(supabase_client=supabase, openai_client=profile_scheduler._openai if profile_scheduler else None)
+            await smart_memory.finalize_daily_summary(
+                user_id=user_id,
+                conversation_text=conversation_text,
+                last_message=last_user_msg
+            )
+            logger.info("✅ Daily summary finalized with highlights/concerns!")
+        except Exception as e:
+            logger.warning(f"Could not finalize daily summary: {e}")
+        
+        # 4. Reset anti-repetition tracking for this user
         if ctx_builder and user_id:
             ctx_builder.reset_session_tracking(user_id)
             logger.info("🔄 Anti-repetition tracking reset")
@@ -792,6 +868,7 @@ async def handle_session(ctx: agents.JobContext):
             """
             Official LiveKit event - fires when message is committed to chat.
             IMMEDIATELY save to database - no waiting for session end!
+            Also updates DAILY SUMMARY for 24-hour context!
             """
             try:
                 item = event.item
@@ -824,6 +901,26 @@ async def handle_session(ctx: agents.JobContext):
                 })
                 
                 # ============================================================
+                # TRACK MESSAGES FOR DAILY SUMMARY
+                # ============================================================
+                if role == "user":
+                    assistant._last_user_message = text
+                elif role == "assistant":
+                    assistant._last_assistant_message = text
+                    
+                    # UPDATE DAILY SUMMARY (when we have both user & assistant message)
+                    if assistant.smart_memory and user_id and assistant._last_user_message:
+                        asyncio.create_task(
+                            assistant.smart_memory.update_daily_summary(
+                                user_id=user_id,
+                                user_message=assistant._last_user_message,
+                                assistant_message=text,
+                                emotion=str(assistant.last_emotion.value) if assistant.last_emotion else "neutral"
+                            )
+                        )
+                        logger.info(f"📊 Updated DAILY SUMMARY with turn")
+                
+                # ============================================================
                 # CONVERSATION FLOW TRACKING
                 # ============================================================
                 if assistant.ctx_builder and user_id:
@@ -832,7 +929,7 @@ async def handle_session(ctx: agents.JobContext):
                         assistant.ctx_builder.track_conversation_topic(user_id, text)
                         logger.debug(f"📊 Tracked user topic in flow")
                     
-                    # Track ASSISTANT questions for anti-repetition
+                    # Track ASSISTANT questions for anti-repetition + PERSIST to DB!
                     elif role == "assistant" and "?" in text:
                         # Extract the question part
                         sentences = text.replace("!", ".").replace("।", ".").split(".")
@@ -840,8 +937,13 @@ async def handle_session(ctx: agents.JobContext):
                             if "?" in sentence:
                                 question = sentence.strip()
                                 if question:
+                                    # Track in-memory (sync)
                                     assistant.ctx_builder.track_question_asked(user_id, question)
-                                    logger.info(f"📊 Tracked question: {question[:50]}...")
+                                    # Persist to DB (async - fire and forget)
+                                    asyncio.create_task(
+                                        assistant.ctx_builder.persist_question_to_db(user_id, question)
+                                    )
+                                    logger.info(f"📊 Tracked + PERSISTED question: {question[:50]}...")
                 
                 # Store in global session data for on_session_end callback
                 _session_data[room.name] = {

@@ -92,42 +92,79 @@ class ProfileScheduler:
                 )
                 print(f"   ⚠️ Conversation truncated to {len(conversation_text)} chars")
             
-            prompt = f"""Summarize this conversation in 3-5 SHORT sentences (max 300 characters total).
+            prompt = f"""Create a DETAILED summary of this conversation with ALL specifics.
 
-FOCUS ON:
-1. User's emotional state (happy, stressed, sad, excited, etc.)
-2. Main topics discussed
-3. Any important events or facts mentioned
-4. What was on user's mind / their concerns
-5. How the conversation ended (resolved, ongoing issue, etc.)
+OUTPUT FORMAT (JSON):
+{{
+  "summary": "2-3 sentences with ALL specific details - food names, places, people, plans",
+  "topics": ["topic1", "topic2"],
+  "foods_mentioned": ["kadhai paneer", "biryani"],
+  "places_mentioned": ["Karwali restaurant", "office"],
+  "people_mentioned": ["boss", "mom"],
+  "activities": ["had meeting", "watched movie"],
+  "plans": ["try kadhai paneer tomorrow", "Manali trip Saturday"],
+  "concerns": ["work deadline", "tired"],
+  "mood": "happy/sad/stressed/excited/neutral",
+  "key_facts": ["loves paneer", "working on project"]
+}}
 
-FORMAT: Write as a brief narrative, not bullet points.
-Example: "User was stressed about work deadline. Boss criticized their project. They felt tired and upset. Talked about weekend plans which cheered them up. Ended feeling better."
+RULES:
+1. Include EVERY specific thing mentioned - food items, places, names, movies, etc.
+2. Summary must have concrete details: "wants kadhai paneer at Karwali" NOT "discussed food"
+3. Extract ALL topics, activities, plans mentioned
+4. Be thorough - don't miss any detail!
 
 CONVERSATION:
 {conversation_text}
 
-SUMMARY (max 300 chars):"""
+DETAILED JSON:"""
             
             print("\n   📡 Calling LLM for summary...")
             response = await self._openai.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You summarize conversations in 3-5 short sentences. Be concise but capture emotional state and key topics."},
+                    {"role": "system", "content": "Extract detailed conversation summary as JSON. Include ALL specifics: food names, places, people, plans, activities. Be thorough and concrete."},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.3,
-                max_tokens=150,  # ~300 chars max
+                temperature=0.2,
+                max_tokens=400,
+                response_format={"type": "json_object"},
             )
             
-            summary = response.choices[0].message.content.strip()
+            import json
+            try:
+                summary_data = json.loads(response.choices[0].message.content)
+            except:
+                summary_data = {"summary": response.choices[0].message.content.strip()}
+            
+            # Build comprehensive summary text
+            summary_parts = []
+            if summary_data.get("summary"):
+                summary_parts.append(summary_data["summary"])
+            
+            # Add structured details
+            if summary_data.get("foods_mentioned"):
+                summary_parts.append(f"Foods: {', '.join(summary_data['foods_mentioned'])}")
+            if summary_data.get("places_mentioned"):
+                summary_parts.append(f"Places: {', '.join(summary_data['places_mentioned'])}")
+            if summary_data.get("plans"):
+                summary_parts.append(f"Plans: {', '.join(summary_data['plans'])}")
+            if summary_data.get("key_facts"):
+                summary_parts.append(f"Facts: {', '.join(summary_data['key_facts'])}")
+            
+            summary = " | ".join(summary_parts)
             
             # Ensure max length
-            if len(summary) > 350:
-                summary = summary[:347] + "..."
+            if len(summary) > 600:
+                summary = summary[:597] + "..."
+            
+            # Extract topics and emotions for DB
+            topics = summary_data.get("topics", [])
+            emotions = [summary_data.get("mood", "neutral")]
             
             print(f"\n   ✅ SUMMARY GENERATED → conversation_summaries:")
             print(f"      \"{summary}\"")
+            print(f"      Topics: {topics}")
             print(f"      Length: {len(summary)} chars")
             
             # Save to database
@@ -137,6 +174,8 @@ SUMMARY (max 300 chars):"""
                     session_id=session_id,
                     summary=summary,
                     conversation_date=datetime.now().date(),
+                    topics=topics,
+                    emotions=emotions,
                 )
                 print(f"\n   💾 SAVED TO DATABASE: conversation_summaries")
             
@@ -164,30 +203,32 @@ SUMMARY (max 300 chars):"""
         session_id: str,
         summary: str,
         conversation_date: datetime,
+        topics: list[str] = None,
+        emotions: list[str] = None,
     ):
         """Save conversation summary to database (max 7 per user)"""
         if not self._supabase:
             return
         
         try:
-            # Extract topics and emotions from summary using simple patterns
-            topics = []
-            emotions = []
+            # Use provided topics/emotions or extract from summary
+            if not topics:
+                topics = []
+                topic_keywords = ["work", "family", "health", "relationship", "travel", "food", 
+                               "stress", "money", "friends", "career", "hobby"]
+                summary_lower = summary.lower()
+                for keyword in topic_keywords:
+                    if keyword in summary_lower:
+                        topics.append(keyword)
             
-            # Simple topic extraction
-            topic_keywords = ["work", "family", "health", "relationship", "travel", "food", 
-                           "stress", "money", "friends", "career", "hobby"]
-            summary_lower = summary.lower()
-            for keyword in topic_keywords:
-                if keyword in summary_lower:
-                    topics.append(keyword)
-            
-            # Simple emotion extraction
-            emotion_keywords = ["happy", "sad", "stressed", "excited", "anxious", "tired", 
-                              "angry", "calm", "worried", "bored"]
-            for keyword in emotion_keywords:
-                if keyword in summary_lower:
-                    emotions.append(keyword)
+            if not emotions:
+                emotions = []
+                emotion_keywords = ["happy", "sad", "stressed", "excited", "anxious", "tired", 
+                                  "angry", "calm", "worried", "bored"]
+                summary_lower = summary.lower()
+                for keyword in emotion_keywords:
+                    if keyword in summary_lower:
+                        emotions.append(keyword)
             
             data = {
                 "user_id": user_id,

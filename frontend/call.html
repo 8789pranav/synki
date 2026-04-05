@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Incoming Call - Synki 💕</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            overflow: hidden;
+        }
+
+        /* Incoming Call Screen */
+        .incoming-call {
+            text-align: center;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Avatar with pulse animation */
+        .avatar-container {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        .avatar {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff6b9d, #ff8a65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            box-shadow: 0 10px 40px rgba(255, 107, 157, 0.4);
+            position: relative;
+            z-index: 2;
+        }
+
+        .pulse-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 107, 157, 0.5);
+            animation: pulse 1.5s ease-out infinite;
+        }
+
+        .pulse-ring:nth-child(2) {
+            animation-delay: 0.5s;
+        }
+
+        .pulse-ring:nth-child(3) {
+            animation-delay: 1s;
+        }
+
+        @keyframes pulse {
+            0% {
+                width: 150px;
+                height: 150px;
+                opacity: 1;
+            }
+            100% {
+                width: 250px;
+                height: 250px;
+                opacity: 0;
+            }
+        }
+
+        /* Caller info */
+        .caller-name {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .call-status {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 10px;
+        }
+
+        .call-message {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.6);
+            font-style: italic;
+            margin-bottom: 50px;
+            max-width: 300px;
+        }
+
+        /* Call buttons */
+        .call-buttons {
+            display: flex;
+            gap: 60px;
+            justify-content: center;
+        }
+
+        .call-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .call-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .call-btn:active {
+            transform: scale(0.95);
+        }
+
+        .decline-btn {
+            background: linear-gradient(135deg, #ff4757, #ff6b6b);
+        }
+
+        .decline-btn:hover {
+            box-shadow: 0 8px 30px rgba(255, 71, 87, 0.5);
+        }
+
+        .accept-btn {
+            background: linear-gradient(135deg, #2ed573, #7bed9f);
+        }
+
+        .accept-btn:hover {
+            box-shadow: 0 8px 30px rgba(46, 213, 115, 0.5);
+        }
+
+        /* Swipe indicator */
+        .swipe-hint {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 14px;
+        }
+
+        /* Hidden by default */
+        .hidden {
+            display: none !important;
+        }
+
+        /* ============================================ */
+        /* IN-CALL SCREEN */
+        /* ============================================ */
+        .in-call {
+            text-align: center;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .in-call .avatar {
+            width: 120px;
+            height: 120px;
+            font-size: 50px;
+            margin-bottom: 20px;
+        }
+
+        .call-timer {
+            font-size: 24px;
+            color: #2ed573;
+            margin-bottom: 10px;
+            font-family: 'SF Mono', monospace;
+        }
+
+        .call-quality {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 40px;
+        }
+
+        /* In-call controls */
+        .call-controls {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .control-btn.active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .end-call-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff4757, #ff6b6b);
+            border: none;
+            cursor: pointer;
+            font-size: 28px;
+            color: white;
+            box-shadow: 0 8px 30px rgba(255, 71, 87, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .end-call-btn:hover {
+            transform: scale(1.1);
+        }
+
+        /* Voice visualizer */
+        .voice-visualizer {
+            display: flex;
+            gap: 4px;
+            justify-content: center;
+            height: 40px;
+            align-items: flex-end;
+            margin-bottom: 30px;
+        }
+
+        .voice-bar {
+            width: 4px;
+            background: linear-gradient(to top, #ff6b9d, #ff8a65);
+            border-radius: 2px;
+            animation: voiceWave 0.5s ease-in-out infinite alternate;
+        }
+
+        .voice-bar:nth-child(1) { height: 10px; animation-delay: 0.0s; }
+        .voice-bar:nth-child(2) { height: 20px; animation-delay: 0.1s; }
+        .voice-bar:nth-child(3) { height: 30px; animation-delay: 0.2s; }
+        .voice-bar:nth-child(4) { height: 15px; animation-delay: 0.3s; }
+        .voice-bar:nth-child(5) { height: 25px; animation-delay: 0.4s; }
+        .voice-bar:nth-child(6) { height: 35px; animation-delay: 0.5s; }
+        .voice-bar:nth-child(7) { height: 20px; animation-delay: 0.6s; }
+        .voice-bar:nth-child(8) { height: 10px; animation-delay: 0.7s; }
+
+        @keyframes voiceWave {
+            to {
+                height: calc(100% - 10px);
+            }
+        }
+
+        /* Audio element (hidden) */
+        audio {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Ringtone audio -->
+    <audio id="ringtone" loop>
+        <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- ============================================ -->
+    <!-- INCOMING CALL SCREEN -->
+    <!-- ============================================ -->
+    <div id="incoming-call" class="incoming-call">
+        <div class="avatar-container">
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring"></div>
+            <div class="avatar">💕</div>
+        </div>
+
+        <div class="caller-name">Synki</div>
+        <div class="call-status">Incoming call...</div>
+        <div class="call-message" id="call-message">Miss kar rahi thi tumhe...</div>
+
+        <div class="call-buttons">
+            <button class="call-btn decline-btn" onclick="declineCall()">
+                ✕
+            </button>
+            <button class="call-btn accept-btn" onclick="acceptCall()">
+                📞
+            </button>
+        </div>
+
+        <div class="swipe-hint">Tap to answer or decline</div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- IN-CALL SCREEN -->
+    <!-- ============================================ -->
+    <div id="in-call" class="in-call hidden">
+        <div class="avatar">💕</div>
+        <div class="caller-name">Synki</div>
+        <div class="call-timer" id="call-timer">00:00</div>
+        <div class="call-quality">HD Voice</div>
+
+        <div class="voice-visualizer">
+            <div class="voice-bar"></div>
+            <div class="voice-bar"></div>
+            <div class="voice-bar"></div>
+            <div class="voice-bar"></div>
+            <div class="voice-bar"></div>
+            <div class="voice-bar"></div>
+            <div class="voice-bar"></div>
+            <div class="voice-bar"></div>
+        </div>
+
+        <div class="call-controls">
+            <button class="control-btn" id="mute-btn" onclick="toggleMute()">🎤</button>
+            <button class="control-btn" id="speaker-btn" onclick="toggleSpeaker()">🔊</button>
+        </div>
+
+        <button class="end-call-btn" onclick="endCall()">📞</button>
+    </div>
+
+    <script>
+        // ============================================
+        // Configuration
+        // ============================================
+        const API_BASE = window.location.origin;
+        let pendingId = null;
+        let callStartTime = null;
+        let timerInterval = null;
+
+        // Get pending ID from URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        pendingId = urlParams.get('pending_id');
+        const message = urlParams.get('message');
+
+        if (message) {
+            document.getElementById('call-message').textContent = decodeURIComponent(message);
+        }
+
+        // ============================================
+        // Start ringtone
+        // ============================================
+        window.onload = () => {
+            const ringtone = document.getElementById('ringtone');
+            ringtone.volume = 0.5;
+            
+            // Try to play (might be blocked by browser)
+            ringtone.play().catch(e => {
+                console.log('Autoplay blocked, user interaction needed');
+            });
+
+            // Vibrate if supported
+            if ('vibrate' in navigator) {
+                // Vibrate pattern: vibrate 500ms, pause 500ms, repeat
+                setInterval(() => {
+                    navigator.vibrate([500, 500]);
+                }, 1000);
+            }
+        };
+
+        // ============================================
+        // Call Actions
+        // ============================================
+        async function acceptCall() {
+            // Stop ringtone
+            document.getElementById('ringtone').pause();
+            navigator.vibrate(0); // Stop vibration
+
+            // Hide incoming, show in-call
+            document.getElementById('incoming-call').classList.add('hidden');
+            document.getElementById('in-call').classList.remove('hidden');
+
+            // Start timer
+            callStartTime = Date.now();
+            timerInterval = setInterval(updateTimer, 1000);
+
+            // Notify backend
+            if (pendingId) {
+                try {
+                    const response = await fetch(`${API_BASE}/api/proactive/answer`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pending_id: pendingId })
+                    });
+                    const data = await response.json();
+                    console.log('Call answered:', data);
+
+                    // Redirect to voice agent with greeting context
+                    // This connects to the actual LiveKit agent
+                    if (data.greeting) {
+                        sessionStorage.setItem('proactive_greeting', data.greeting);
+                        sessionStorage.setItem('proactive_context', JSON.stringify(data.context || {}));
+                    }
+                    
+                    // After a brief moment, redirect to main app
+                    setTimeout(() => {
+                        window.location.href = `/app.html?proactive=true`;
+                    }, 500);
+                } catch (e) {
+                    console.error('Failed to answer call:', e);
+                }
+            }
+        }
+
+        async function declineCall() {
+            // Stop ringtone
+            document.getElementById('ringtone').pause();
+            navigator.vibrate(0);
+
+            // Notify backend
+            if (pendingId) {
+                try {
+                    await fetch(`${API_BASE}/api/proactive/dismiss`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pending_id: pendingId })
+                    });
+                } catch (e) {
+                    console.error('Failed to dismiss call:', e);
+                }
+            }
+
+            // Go back or close
+            window.close();
+            window.location.href = '/';
+        }
+
+        function endCall() {
+            clearInterval(timerInterval);
+            // Redirect to main app
+            window.location.href = '/app.html';
+        }
+
+        function updateTimer() {
+            const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const seconds = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById('call-timer').textContent = `${minutes}:${seconds}`;
+        }
+
+        // ============================================
+        // Control toggles
+        // ============================================
+        let isMuted = false;
+        let isSpeaker = false;
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            document.getElementById('mute-btn').classList.toggle('active', isMuted);
+            document.getElementById('mute-btn').textContent = isMuted ? '🔇' : '🎤';
+        }
+
+        function toggleSpeaker() {
+            isSpeaker = !isSpeaker;
+            document.getElementById('speaker-btn').classList.toggle('active', isSpeaker);
+        }
+
+        // ============================================
+        // Keyboard shortcuts
+        // ============================================
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                if (!document.getElementById('incoming-call').classList.contains('hidden')) {
+                    acceptCall();
+                }
+            } else if (e.key === 'Escape') {
+                if (!document.getElementById('incoming-call').classList.contains('hidden')) {
+                    declineCall();
+                } else {
+                    endCall();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

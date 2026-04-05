@@ -17,14 +17,33 @@ Synki is a Hindi GF-style voice companion using:
 User Audio → Deepgram STT → Orchestrator → OpenAI LLM → Cartesia TTS → User Audio
 ```
 
+### Proactive GF System
+```
+Scheduler → Decision Engine → Message Generator → Push Notification → User
+                ↓
+        (Time + Mood + History)
+```
+
+**Proactive Features:**
+- Morning greetings, lunch check-ins, evening calls
+- Random "miss you" messages
+- Incoming call UI (rings, user picks up)
+- Smart timing based on user's mood and history
+
 ### Orchestrator Components
 - `SessionManager`: Manages conversation sessions
 - `ContextManager`: Tracks recent messages and topics
+- `ContextBuilder`: Smart context with anti-repetition, conversation flow
 - `MemoryService`: Long-term user facts (Redis)
 - `EmotionDetector`: Pattern-based emotion detection
 - `IntentDetector`: Classifies user input
 - `PersonaEngine`: Manages GF personality
 - `ResponsePlanner`: Decides response strategy
+
+### Proactive Components (NEW)
+- `DecisionEngine`: Decides when/how to contact user
+- `MessageGenerator`: Natural Hinglish messages
+- `ProactiveScheduler`: Background job for triggering contacts
 
 ## File Structure
 
@@ -34,8 +53,14 @@ src/synki/
 │   └── companion_agent.py  # Main entry point
 ├── orchestrator/           # AI orchestration
 │   ├── orchestrator.py     # Main coordinator
+│   ├── context_builder.py  # Smart context builder
 │   ├── persona_engine.py   # Personality management
 │   └── ...
+├── proactive/              # Proactive GF system (NEW)
+│   ├── decision_engine.py  # When/how to contact
+│   ├── message_generator.py # Natural messages
+│   ├── scheduler.py        # Background scheduler
+│   └── api.py             # API endpoints
 ├── services/               # External APIs
 │   ├── stt_service.py      # Deepgram
 │   ├── llm_service.py      # OpenAI
@@ -70,6 +95,9 @@ uv run python -m synki.agent dev
 
 # Production
 uv run python -m synki.agent start
+
+# Run proactive scheduler (cron job)
+python -m synki.proactive.scheduler
 ```
 
 ## Testing

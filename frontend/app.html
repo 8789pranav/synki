@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synki - Your AI Girlfriend 💕</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.0.0/dist/livekit-client.umd.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary: #ff6b9d;
+            --primary-dark: #e91e63;
+            --secondary: #7c4dff;
+            --bg-dark: #1a1a2e;
+            --bg-card: rgba(255,255,255,0.05);
+            --text-primary: #ffffff;
+            --text-secondary: #b8b8d1;
+            --success: #4caf50;
+            --error: #f44336;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark), #2d1f4e);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* ===== AUTH STYLES ===== */
+        .auth-container {
+            max-width: 400px;
+            width: 100%;
+            padding: 20px;
+        }
+
+        .auth-card {
+            background: var(--bg-card);
+            border-radius: 24px;
+            padding: 40px 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .auth-logo {
+            font-size: 3rem;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .auth-title {
+            font-size: 1.8rem;
+            text-align: center;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .auth-subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            font-size: 0.95rem;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 14px 18px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            background: rgba(0,0,0,0.2);
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(255,107,157,0.2);
+        }
+
+        .auth-btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 15px;
+        }
+
+        .auth-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255,107,157,0.4);
+        }
+
+        .auth-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .auth-switch {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .auth-switch a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .auth-switch a:hover {
+            text-decoration: underline;
+        }
+
+        .auth-error {
+            background: rgba(244,67,54,0.2);
+            border: 1px solid var(--error);
+            color: var(--error);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            text-align: center;
+            display: none;
+        }
+
+        .auth-error.show {
+            display: block;
+        }
+
+        /* ===== MAIN APP STYLES ===== */
+        .app-container {
+            max-width: 500px;
+            width: 100%;
+            padding: 20px;
+            display: none;
+        }
+
+        .app-container.show {
+            display: block;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .user-name {
+            font-weight: 600;
+        }
+
+        .user-email {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .logout-btn {
+            padding: 10px 20px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 20px;
+            background: transparent;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            background: rgba(255,255,255,0.1);
+            margin: 0 auto 20px;
+            display: block;
+            text-align: center;
+            width: fit-content;
+        }
+        .status.connected { background: rgba(76,175,80,0.3); color: #4caf50; }
+        .status.waiting { background: rgba(255,193,7,0.3); color: #ffc107; }
+        .status.error { background: rgba(244,67,54,0.3); color: #f44336; }
+
+        .avatar-section {
+            text-align: center;
+        }
+
+        .avatar {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-size: 4.5rem;
+            box-shadow: 0 10px 40px rgba(255, 107, 157, 0.3);
+            transition: all 0.3s;
+        }
+        .avatar.speaking {
+            animation: pulse 1s ease-in-out infinite;
+            box-shadow: 0 15px 60px rgba(255, 107, 157, 0.5);
+        }
+        .avatar.listening {
+            box-shadow: 0 10px 40px rgba(124, 77, 255, 0.4);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .avatar-status {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            margin-bottom: 20px;
+        }
+
+        .emotion-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            background: rgba(124, 77, 255, 0.3);
+            margin-bottom: 15px;
+        }
+
+        .transcript-box {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 16px;
+            margin: 20px 0;
+            min-height: 150px;
+            max-height: 220px;
+            overflow-y: auto;
+            text-align: left;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 16px;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+            position: relative;
+        }
+        .message.user {
+            background: rgba(124, 77, 255, 0.2);
+            margin-left: 40px;
+            border-bottom-right-radius: 4px;
+        }
+        .message.assistant {
+            background: rgba(255, 107, 157, 0.2);
+            margin-right: 40px;
+            border-bottom-left-radius: 4px;
+        }
+        .message.system {
+            background: rgba(255,255,255,0.05);
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .message-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            opacity: 0.7;
+            margin-bottom: 4px;
+        }
+        .message-time {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            position: absolute;
+            bottom: 4px;
+            right: 10px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 14px 32px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+
+        .btn-connect {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+        }
+        .btn-disconnect {
+            background: linear-gradient(135deg, var(--error), #c62828);
+            color: white;
+        }
+
+        .mic-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 30px;
+            font-size: 0.9rem;
+        }
+        .mic-status.active { background: rgba(76,175,80,0.3); }
+        .mic-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--error);
+        }
+        .mic-status.active .mic-dot {
+            background: var(--success);
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .memory-section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+
+        .memory-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+
+        .memory-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .memory-item {
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.1);
+            font-size: 0.8rem;
+        }
+
+        audio { display: none; }
+
+        .hidden { display: none !important; }
+
+        /* ===== INCOMING CALL OVERLAY ===== */
+        .incoming-call-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .call-avatar-container {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        .call-avatar {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), #ff8a65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            box-shadow: 0 10px 40px rgba(255, 107, 157, 0.4);
+            position: relative;
+            z-index: 2;
+        }
+
+        .pulse-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 107, 157, 0.5);
+            animation: callPulse 1.5s ease-out infinite;
+        }
+        .pulse-ring:nth-child(2) { animation-delay: 0.5s; }
+        .pulse-ring:nth-child(3) { animation-delay: 1s; }
+
+        @keyframes callPulse {
+            0% { width: 150px; height: 150px; opacity: 1; }
+            100% { width: 250px; height: 250px; opacity: 0; }
+        }
+
+        .call-caller-name {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .call-status-text {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 10px;
+        }
+
+        .call-message {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.6);
+            font-style: italic;
+            margin-bottom: 50px;
+            max-width: 300px;
+            text-align: center;
+        }
+
+        .call-buttons {
+            display: flex;
+            gap: 60px;
+        }
+
+        .call-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .call-btn:hover { transform: scale(1.1); }
+        .call-btn:active { transform: scale(0.95); }
+
+        .decline-call-btn {
+            background: linear-gradient(135deg, #ff4757, #ff6b6b);
+        }
+
+        .accept-call-btn {
+            background: linear-gradient(135deg, #2ed573, #7bed9f);
+        }
+
+        /* ===== NOTIFICATION BADGE ===== */
+        .notification-badge {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            padding: 12px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(255, 107, 157, 0.4);
+            cursor: pointer;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+            max-width: 300px;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .notification-badge .notif-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .notification-badge .notif-message {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .notification-badge .notif-close {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            opacity: 0.7;
+        }
+
+        .notification-badge .notif-close:hover { opacity: 1; }
+    </style>
+</head>
+<body>
+    <!-- Auth Container -->
+    <div class="auth-container" id="authContainer">
+        <div class="auth-card">
+            <div class="auth-logo">💕</div>
+            <h1 class="auth-title">Synki</h1>
+            <p class="auth-subtitle">Your AI Girlfriend awaits...</p>
+
+            <div class="auth-error" id="authError"></div>
+
+            <!-- Login Form -->
+            <form id="loginForm">
+                <div class="input-group">
+                    <label>Email</label>
+                    <input type="email" id="loginEmail" placeholder="your@email.com" required>
+                </div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="auth-btn" id="loginBtn">💕 Login</button>
+                <p class="auth-switch">
+                    Don't have an account? <a href="#" id="showSignup">Sign up</a>
+                </p>
+            </form>
+
+            <!-- Signup Form -->
+            <form id="signupForm" class="hidden">
+                <div class="input-group">
+                    <label>Your Name</label>
+                    <input type="text" id="signupName" placeholder="What should I call you?" required>
+                </div>
+                <div class="input-group">
+                    <label>Email</label>
+                    <input type="email" id="signupEmail" placeholder="your@email.com" required>
+                </div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="signupPassword" placeholder="••••••••" minlength="6" required>
+                </div>
+                <button type="submit" class="auth-btn" id="signupBtn">💕 Create Account</button>
+                <p class="auth-switch">
+                    Already have an account? <a href="#" id="showLogin">Login</a>
+                </p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div class="app-container" id="appContainer">
+        <div class="header">
+            <div class="user-info">
+                <div class="user-avatar" id="userAvatar">👤</div>
+                <div>
+                    <div class="user-name" id="userName">User</div>
+                    <div class="user-email" id="userEmail">email@example.com</div>
+                </div>
+            </div>
+            <button class="logout-btn" id="logoutBtn">Logout</button>
+        </div>
+
+        <h1 class="logo">💕 Synki</h1>
+        <div class="status" id="status">Click Connect to start</div>
+
+        <div class="avatar-section">
+            <div class="avatar" id="avatar">🥰</div>
+            <div class="emotion-badge" id="emotionBadge">Mood: Ready to chat</div>
+            <p class="avatar-status" id="avatarStatus">Your AI Girlfriend awaits...</p>
+        </div>
+
+        <div class="transcript-box" id="transcript">
+            <div class="message system">Welcome back! 💕 Connect to talk with Synki</div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-connect" id="connectBtn">💕 Connect</button>
+            <div class="mic-status" id="micStatus"><span class="mic-dot"></span><span>Mic Off</span></div>
+            <button class="btn btn-disconnect" id="disconnectBtn" disabled>👋 Bye</button>
+        </div>
+
+        <div class="memory-section" id="memorySection">
+            <div class="memory-title">🧠 Synki Remembers</div>
+            <div class="memory-items" id="memoryItems">
+                <div class="memory-item">Loading memories...</div>
+            </div>
+        </div>
+
+        <!-- Prompt Viewer Section -->
+        <div class="memory-section" id="promptSection" style="margin-top: 20px;">
+            <div class="memory-title" style="cursor: pointer;" onclick="togglePromptViewer()">
+                🤖 Agent Prompt <span id="promptToggle">▶</span>
+            </div>
+            <div id="promptViewer" style="display: none; margin-top: 10px;">
+                <button class="btn" onclick="loadAgentPrompt()" style="margin-bottom: 10px; padding: 8px 16px; font-size: 14px;">🔄 Load Prompt</button>
+                <div id="promptContent" style="
+                    background: rgba(0,0,0,0.3);
+                    border-radius: 12px;
+                    padding: 15px;
+                    font-family: monospace;
+                    font-size: 12px;
+                    white-space: pre-wrap;
+                    max-height: 400px;
+                    overflow-y: auto;
+                    line-height: 1.6;
+                    color: #b8b8d1;
+                ">
+                    Click "Load Prompt" to see the system prompt...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Incoming Call Overlay (hidden by default) -->
+    <div class="incoming-call-overlay hidden" id="incomingCallOverlay">
+        <div class="call-avatar-container">
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring"></div>
+            <div class="call-avatar">💕</div>
+        </div>
+        <div class="call-caller-name">Synki</div>
+        <div class="call-status-text">Incoming call...</div>
+        <div class="call-message" id="callMessage">Miss kar rahi thi tumhe...</div>
+        <div class="call-buttons">
+            <button class="call-btn decline-call-btn" onclick="declineProactiveCall()">✕</button>
+            <button class="call-btn accept-call-btn" onclick="acceptProactiveCall()">📞</button>
+        </div>
+    </div>
+
+    <!-- Ringtone Audio -->
+    <audio id="ringtone" loop>
+        <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        // ===== CONFIGURATION =====
+        const API_BASE = 'http://localhost:8000';
+        const SUPABASE_URL = 'https://zdzsewasxaqatfrdvhiy.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkenNld2FzeGFxYXRmcmR2aGl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMzY4OTAsImV4cCI6MjA5MDgxMjg5MH0.ht9J0PJKNDxdOB__SZJ7mKesexy5rBrGeCXa7g3w9kg';
+        const LIVEKIT_URL = 'wss://synk-wtut6pa9.livekit.cloud';
+        const API_KEY = 'APIQN76asqnXxN9';
+        const API_SECRET = 'MGVLskd6sFPvL8L6SJ0Nn6m7dogVSkWy7BKWGWOkfLZ';
+
+        // Initialize Supabase (for data only, auth via API)
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // State
+        let room = null;
+        let currentUser = null;
+        let accessToken = null;
+        let userMemories = {};
+        let chatHistory = [];
+
+        // Elements
+        const authContainer = document.getElementById('authContainer');
+        const appContainer = document.getElementById('appContainer');
+        const loginForm = document.getElementById('loginForm');
+        const signupForm = document.getElementById('signupForm');
+        const authError = document.getElementById('authError');
+        const statusEl = document.getElementById('status');
+        const avatarEl = document.getElementById('avatar');
+        const avatarStatusEl = document.getElementById('avatarStatus');
+        const emotionBadge = document.getElementById('emotionBadge');
+        const transcriptEl = document.getElementById('transcript');
+        const memoryItems = document.getElementById('memoryItems');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const micStatus = document.getElementById('micStatus');
+
+        // ===== AUTH FUNCTIONS =====
+        console.log('Setting up auth handlers...');
+        
+        document.getElementById('showSignup').onclick = (e) => {
+            console.log('Show signup clicked');
+            e.preventDefault();
+            loginForm.classList.add('hidden');
+            signupForm.classList.remove('hidden');
+            authError.classList.remove('show');
+        };
+
+        document.getElementById('showLogin').onclick = (e) => {
+            console.log('Show login clicked');
+            e.preventDefault();
+            signupForm.classList.add('hidden');
+            loginForm.classList.remove('hidden');
+            authError.classList.remove('show');
+        };
+
+        function showAuthError(msg) {
+            console.log('Auth error:', msg);
+            authError.textContent = msg;
+            authError.classList.add('show');
+        }
+
+        // Sign Up
+        signupForm.onsubmit = async (e) => {
+            console.log('Signup form submitted');
+            e.preventDefault();
+            const name = document.getElementById('signupName').value;
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+
+            try {
+                document.getElementById('signupBtn').disabled = true;
+                document.getElementById('signupBtn').textContent = 'Creating...';
+
+                const response = await fetch(`${API_BASE}/auth/signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, name })
+                });
+                const result = await response.json();
+
+                if (!result.success) throw new Error(result.message);
+
+                // Store token and show app
+                accessToken = result.access_token;
+                localStorage.setItem('synki_token', accessToken);
+                localStorage.setItem('synki_user', JSON.stringify({
+                    id: result.user_id,
+                    email: email,
+                    name: result.name
+                }));
+
+                showApp({ id: result.user_id, email }, result.name);
+            } catch (err) {
+                showAuthError(err.message);
+            } finally {
+                document.getElementById('signupBtn').disabled = false;
+                document.getElementById('signupBtn').textContent = '💕 Create Account';
+            }
+        };
+
+        // Login
+        loginForm.onsubmit = async (e) => {
+            console.log('Login form submitted');
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            console.log('Login attempt:', email);
+
+            try {
+                document.getElementById('loginBtn').disabled = true;
+                document.getElementById('loginBtn').textContent = 'Logging in...';
+
+                const response = await fetch(`${API_BASE}/auth/signin`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const result = await response.json();
+
+                if (!result.success) throw new Error(result.message);
+
+                // Store token and show app
+                accessToken = result.access_token;
+                localStorage.setItem('synki_token', accessToken);
+                localStorage.setItem('synki_user', JSON.stringify({
+                    id: result.user_id,
+                    email: email,
+                    name: result.name
+                }));
+
+                showApp({ id: result.user_id, email }, result.name);
+            } catch (err) {
+                showAuthError(err.message);
+            } finally {
+                document.getElementById('loginBtn').disabled = false;
+                document.getElementById('loginBtn').textContent = '💕 Login';
+            }
+        };
+
+        // Logout
+        document.getElementById('logoutBtn').onclick = async () => {
+            try {
+                await fetch(`${API_BASE}/auth/signout`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+            } catch (e) {}
+            
+            localStorage.removeItem('synki_token');
+            localStorage.removeItem('synki_user');
+            accessToken = null;
+            currentUser = null;
+            authContainer.style.display = 'block';
+            appContainer.classList.remove('show');
+            if (room) await room.disconnect();
+        };
+
+        // Show App
+        async function showApp(user, name) {
+            currentUser = user;
+            authContainer.style.display = 'none';
+            appContainer.classList.add('show');
+
+            document.getElementById('userName').textContent = name || 'Baby';
+            document.getElementById('userEmail').textContent = user.email;
+            document.getElementById('userAvatar').textContent = (name || 'U')[0].toUpperCase();
+
+            // Load memories
+            await loadMemories();
+            // Load chat history
+            await loadChatHistory();
+            
+            // Start proactive polling (checks for incoming calls/messages)
+            startProactivePolling();
+        }
+
+        // Load memories
+        async function loadMemories() {
+            try {
+                const { data } = await supabaseClient
+                    .from('memories')
+                    .select('*')
+                    .eq('user_id', currentUser.id)
+                    .single();
+
+                if (data) {
+                    userMemories = data;
+                    displayMemories();
+                }
+            } catch (err) {
+                console.log('No memories yet');
+            }
+        }
+
+        // Display memories
+        function displayMemories() {
+            const items = [];
+            if (userMemories.name) items.push(`Name: ${userMemories.name}`);
+            if (userMemories.preferences?.favorite_topic) items.push(`Loves: ${userMemories.preferences.favorite_topic}`);
+            if (userMemories.facts?.length > 0) {
+                userMemories.facts.slice(-3).forEach(f => items.push(f));
+            }
+
+            if (items.length === 0) {
+                memoryItems.innerHTML = '<div class="memory-item">Getting to know you...</div>';
+            } else {
+                memoryItems.innerHTML = items.map(i => `<div class="memory-item">${i}</div>`).join('');
+            }
+        }
+
+        // Save memory
+        async function saveMemory(updates) {
+            try {
+                const newData = { ...userMemories, ...updates, updated_at: new Date().toISOString() };
+                await supabaseClient
+                    .from('memories')
+                    .upsert({ user_id: currentUser.id, ...newData });
+                userMemories = newData;
+                displayMemories();
+            } catch (err) {
+                console.error('Failed to save memory:', err);
+            }
+        }
+
+        // Load chat history
+        async function loadChatHistory() {
+            try {
+                const { data } = await supabaseClient
+                    .from('chat_history')
+                    .select('*')
+                    .eq('user_id', currentUser.id)
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+
+                if (data && data.length > 0) {
+                    chatHistory = data.reverse();
+                    // Show last few messages
+                    transcriptEl.innerHTML = '';
+                    chatHistory.slice(-5).forEach(msg => {
+                        addMessage(msg.role, msg.content, false);
+                    });
+                    addMessage('system', '💕 Previous conversation loaded. Connect to continue!');
+                }
+            } catch (err) {
+                console.log('No chat history');
+            }
+        }
+
+        // Save chat message
+        async function saveChatMessage(role, content) {
+            try {
+                await supabaseClient.from('chat_history').insert({
+                    user_id: currentUser.id,
+                    role: role,
+                    content: content,
+                    created_at: new Date().toISOString()
+                });
+            } catch (err) {
+                console.error('Failed to save chat:', err);
+            }
+        }
+
+        // ===== VOICE FUNCTIONS =====
+        function addMessage(type, text, save = true) {
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            if (type === 'user') {
+                div.innerHTML = `<div class="message-label">🗣️ You</div>${text}<span class="message-time">${time}</span>`;
+                if (save && currentUser) saveChatMessage('user', text);
+            } else if (type === 'assistant') {
+                div.innerHTML = `<div class="message-label">💕 Synki</div>${text}<span class="message-time">${time}</span>`;
+                if (save && currentUser) saveChatMessage('assistant', text);
+            } else {
+                div.textContent = text;
+            }
+            
+            transcriptEl.appendChild(div);
+            transcriptEl.scrollTop = transcriptEl.scrollHeight;
+            while (transcriptEl.children.length > 25) transcriptEl.removeChild(transcriptEl.firstChild);
+        }
+
+        // Detect emotion from text
+        function detectEmotion(text) {
+            const lower = text.toLowerCase();
+            if (/happy|khush|yay|great|amazing|awesome|excited/.test(lower)) return '😊 Happy';
+            if (/sad|dukhi|upset|cry|miss|hurt/.test(lower)) return '😢 Sad';
+            if (/tired|thak|exhausted|sleepy|neend/.test(lower)) return '😴 Tired';
+            if (/stress|tension|overwhelm|pressure/.test(lower)) return '😰 Stressed';
+            if (/angry|gussa|frustrated|annoyed/.test(lower)) return '😤 Frustrated';
+            if (/love|pyar|miss you|i love/.test(lower)) return '💕 Loving';
+            if (/bored|bore|nothing/.test(lower)) return '😐 Bored';
+            return '💭 Neutral';
+        }
+
+        // Update emotion display
+        function updateEmotion(text) {
+            const emotion = detectEmotion(text);
+            emotionBadge.textContent = `Mood: ${emotion}`;
+        }
+
+        // Generate JWT Token
+        async function createToken(identity, roomName) {
+            const b64url = str => btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+            const now = Math.floor(Date.now() / 1000);
+            
+            const header = { alg: 'HS256', typ: 'JWT' };
+            const payload = {
+                iss: API_KEY,
+                sub: identity,
+                iat: now,
+                exp: now + 3600,
+                nbf: now,
+                jti: `${identity}-${now}`,
+                name: identity,
+                video: {
+                    room: roomName,
+                    roomJoin: true,
+                    roomCreate: true,
+                    canPublish: true,
+                    canSubscribe: true,
+                    canPublishData: true
+                },
+                metadata: JSON.stringify({
+                    user_id: currentUser?.id,
+                    user_name: userMemories?.name || 'Baby',
+                    memories: JSON.stringify(userMemories || {})
+                })
+            };
+
+            const headerEnc = b64url(JSON.stringify(header));
+            const payloadEnc = b64url(JSON.stringify(payload));
+            const message = `${headerEnc}.${payloadEnc}`;
+
+            const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(API_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+            const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+            const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+            
+            return `${message}.${sigB64}`;
+        }
+
+        // Connect
+        connectBtn.onclick = async () => {
+            try {
+                connectBtn.disabled = true;
+                setStatus('Connecting...', '');
+
+                const roomName = `synki-${currentUser?.id || Date.now()}`;
+                
+                // Call API to get token AND dispatch agent
+                console.log('🔌 Requesting token from API...');
+                const tokenResponse = await fetch(`${API_BASE}/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: currentUser.id,
+                        room_name: roomName,
+                        user_name: userMemories?.name || 'Baby'
+                    })
+                });
+                
+                if (!tokenResponse.ok) {
+                    throw new Error(`Token request failed: ${tokenResponse.status}`);
+                }
+                
+                const tokenData = await tokenResponse.json();
+                const token = tokenData.token;
+                console.log('✅ Token received, connecting to room:', roomName);
+
+                room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
+
+                // Room events
+                room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+                    if (track.kind === 'audio') {
+                        const audio = track.attach();
+                        document.body.appendChild(audio);
+                        avatarEl.classList.add('speaking');
+                        avatarEl.classList.remove('listening');
+                        avatarStatusEl.textContent = 'Synki बोल रही है... 💕';
+                    }
+                });
+
+                room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+                    if (track.kind === 'audio') track.detach().forEach(el => el.remove());
+                });
+
+                room.on(LivekitClient.RoomEvent.TrackMuted, (pub, participant) => {
+                    if (!participant.isLocal) {
+                        avatarEl.classList.remove('speaking');
+                        avatarEl.classList.add('listening');
+                        avatarStatusEl.textContent = 'सुन रही हूं जान... 🎧';
+                    }
+                });
+
+                room.on(LivekitClient.RoomEvent.TrackUnmuted, (pub, participant) => {
+                    if (!participant.isLocal && pub.kind === 'audio') {
+                        avatarEl.classList.add('speaking');
+                        avatarEl.classList.remove('listening');
+                        avatarStatusEl.textContent = 'Synki बोल रही है... 💕';
+                    }
+                });
+
+                room.on(LivekitClient.RoomEvent.ParticipantConnected, (p) => {
+                    if (p.identity.includes('agent') || p.identity.includes('AW_')) {
+                        addMessage('system', '💕 Synki आ गई! बात करो baby...');
+                        avatarStatusEl.textContent = 'Synki is here! बोलो जान...';
+                        setStatus('Connected 💕', 'connected');
+                    }
+                });
+
+                room.on(LivekitClient.RoomEvent.Disconnected, () => {
+                    handleDisconnect();
+                });
+
+                room.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
+                    const isUserSpeaking = speakers.some(s => s.isLocal);
+                    if (isUserSpeaking) {
+                        avatarEl.classList.add('listening');
+                        avatarEl.classList.remove('speaking');
+                    }
+                });
+
+                // Data received (for transcripts)
+                room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant) => {
+                    try {
+                        const data = JSON.parse(new TextDecoder().decode(payload));
+                        if (data.type === 'transcript') {
+                            if (data.role === 'user') {
+                                addMessage('user', data.text);
+                                updateEmotion(data.text);
+                            } else {
+                                addMessage('assistant', data.text);
+                            }
+                        }
+                    } catch (e) {}
+                });
+
+                // Connect to LiveKit using URL from response or default
+                const livekitUrl = tokenData.url || LIVEKIT_URL;
+                console.log('🔌 Connecting to LiveKit:', livekitUrl);
+                await room.connect(livekitUrl, token);
+                await room.localParticipant.setMicrophoneEnabled(true);
+                
+                setStatus('Waiting for Synki...', 'waiting');
+                avatarStatusEl.textContent = 'Connecting to Synki...';
+                updateUI(true);
+                addMessage('system', `✨ Connected! Waiting for Synki...`);
+
+            } catch (err) {
+                console.error(err);
+                setStatus('Error', 'error');
+                connectBtn.disabled = false;
+                addMessage('system', `❌ Connection failed: ${err.message}`);
+            }
+        };
+
+        // Disconnect
+        disconnectBtn.onclick = async () => {
+            if (room) await room.disconnect();
+            handleDisconnect();
+        };
+
+        function handleDisconnect() {
+            room = null;
+            setStatus('Disconnected', '');
+            avatarStatusEl.textContent = 'Click Connect to talk again 💕';
+            avatarEl.classList.remove('speaking', 'listening');
+            updateUI(false);
+            addMessage('system', '👋 Bye bye baby! Miss you...');
+        }
+
+        function setStatus(text, className) {
+            statusEl.textContent = text;
+            statusEl.className = `status ${className}`;
+        }
+
+        function updateUI(connected) {
+            connectBtn.disabled = connected;
+            disconnectBtn.disabled = !connected;
+            micStatus.classList.toggle('active', connected);
+            micStatus.querySelector('span:last-child').textContent = connected ? 'Mic On 🎤' : 'Mic Off';
+        }
+
+        // ===== INITIALIZATION =====
+        async function init() {
+            // Check if user is already logged in (stored session)
+            const storedToken = localStorage.getItem('synki_token');
+            const storedUser = localStorage.getItem('synki_user');
+            
+            if (storedToken && storedUser) {
+                try {
+                    const user = JSON.parse(storedUser);
+                    accessToken = storedToken;
+                    
+                    // Verify token is still valid
+                    const response = await fetch(`${API_BASE}/auth/me`, {
+                        headers: { 'Authorization': `Bearer ${storedToken}` }
+                    });
+                    
+                    if (response.ok) {
+                        const userData = await response.json();
+                        showApp({ id: userData.id, email: userData.email }, userData.name || user.name);
+                        
+                        // Start proactive polling after login
+                        startProactivePolling();
+                    } else {
+                        // Token expired, clear storage
+                        localStorage.removeItem('synki_token');
+                        localStorage.removeItem('synki_user');
+                    }
+                } catch (e) {
+                    console.log('Session expired');
+                }
+            }
+            
+            // Register service worker for push notifications
+            registerServiceWorker();
+        }
+
+        // ===== PROACTIVE GF SYSTEM =====
+        let proactiveInterval = null;
+        let currentPendingContact = null;
+        const PROACTIVE_POLL_INTERVAL = 30000; // Check every 30 seconds
+
+        // Start polling for proactive contacts
+        function startProactivePolling() {
+            if (proactiveInterval) clearInterval(proactiveInterval);
+            
+            // Check immediately
+            checkProactiveContacts();
+            
+            // Then check periodically
+            proactiveInterval = setInterval(checkProactiveContacts, PROACTIVE_POLL_INTERVAL);
+            console.log('🔔 Proactive polling started');
+        }
+
+        // Stop polling
+        function stopProactivePolling() {
+            if (proactiveInterval) {
+                clearInterval(proactiveInterval);
+                proactiveInterval = null;
+            }
+        }
+
+        // Check for pending proactive contacts
+        async function checkProactiveContacts() {
+            if (!currentUser) {
+                console.log('🔔 Proactive check: No user logged in');
+                return;
+            }
+            
+            console.log(`🔔 Checking proactive contacts for user: ${currentUser.id}`);
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/proactive/pending?user_id=${currentUser.id}`);
+                const data = await response.json();
+                
+                console.log('🔔 Proactive response:', data);
+                
+                if (data.pending && data.pending.length > 0) {
+                    const contact = data.pending[0]; // Get first pending
+                    console.log('🔔 Incoming contact!', contact);
+                    handleProactiveContact(contact);
+                } else {
+                    console.log('🔔 No pending contacts');
+                }
+            } catch (e) {
+                console.log('🔔 Proactive check failed:', e);
+            }
+        }
+
+        // Handle a proactive contact
+        function handleProactiveContact(contact) {
+            currentPendingContact = contact;
+            
+            if (contact.contact_type === 'call') {
+                showIncomingCall(contact);
+            } else {
+                showMessageNotification(contact);
+            }
+        }
+
+        // Show incoming call UI
+        function showIncomingCall(contact) {
+            document.getElementById('callMessage').textContent = contact.message || 'Miss kar rahi thi...';
+            document.getElementById('incomingCallOverlay').classList.remove('hidden');
+            
+            // Play ringtone
+            const ringtone = document.getElementById('ringtone');
+            ringtone.volume = 0.5;
+            ringtone.play().catch(e => console.log('Autoplay blocked'));
+            
+            // Vibrate if supported
+            if ('vibrate' in navigator) {
+                navigator.vibrate([500, 300, 500, 300, 500]);
+            }
+        }
+
+        // Accept proactive call
+        async function acceptProactiveCall() {
+            // Stop ringtone
+            document.getElementById('ringtone').pause();
+            navigator.vibrate && navigator.vibrate(0);
+            
+            // Hide overlay
+            document.getElementById('incomingCallOverlay').classList.add('hidden');
+            
+            // Answer the call on backend
+            if (currentPendingContact) {
+                try {
+                    const response = await fetch(`${API_BASE}/api/proactive/answer`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pending_id: currentPendingContact.id, user_id: currentUser.id })
+                    });
+                    const data = await response.json();
+                    
+                    // Store greeting for agent to use
+                    if (data.greeting) {
+                        sessionStorage.setItem('proactive_greeting', data.greeting);
+                    }
+                } catch (e) {
+                    console.log('Failed to answer:', e);
+                }
+            }
+            
+            // Auto-connect to voice agent
+            addMessage('system', '📞 Synki called you! Connecting...');
+            connectBtn.click();
+            
+            currentPendingContact = null;
+        }
+
+        // Decline proactive call
+        async function declineProactiveCall() {
+            // Stop ringtone
+            document.getElementById('ringtone').pause();
+            navigator.vibrate && navigator.vibrate(0);
+            
+            // Hide overlay
+            document.getElementById('incomingCallOverlay').classList.add('hidden');
+            
+            // Mark as missed
+            if (currentPendingContact) {
+                try {
+                    await fetch(`${API_BASE}/api/proactive/dismiss`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pending_id: currentPendingContact.id, user_id: currentUser.id })
+                    });
+                } catch (e) {}
+            }
+            
+            addMessage('system', '📞 Missed call from Synki 💔');
+            currentPendingContact = null;
+        }
+
+        // Show message notification
+        function showMessageNotification(contact) {
+            // Create notification badge
+            const notif = document.createElement('div');
+            notif.className = 'notification-badge';
+            notif.innerHTML = `
+                <button class="notif-close" onclick="this.parentElement.remove()">×</button>
+                <div class="notif-title">💕 Synki</div>
+                <div class="notif-message">${contact.message}</div>
+            `;
+            notif.onclick = (e) => {
+                if (e.target.classList.contains('notif-close')) return;
+                notif.remove();
+                replyToMessage(contact);
+            };
+            
+            document.body.appendChild(notif);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => notif.remove(), 10000);
+            
+            // Mark as read
+            fetch(`${API_BASE}/api/proactive/answer`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pending_id: contact.id, user_id: currentUser.id })
+            }).catch(() => {});
+        }
+
+        // Reply to message (connect and talk)
+        function replyToMessage(contact) {
+            addMessage('assistant', contact.message);
+            addMessage('system', '💬 Click Connect to reply!');
+        }
+
+        // ===== PROMPT VIEWER =====
+        function togglePromptViewer() {
+            const viewer = document.getElementById('promptViewer');
+            const toggle = document.getElementById('promptToggle');
+            if (viewer.style.display === 'none') {
+                viewer.style.display = 'block';
+                toggle.textContent = '▼';
+            } else {
+                viewer.style.display = 'none';
+                toggle.textContent = '▶';
+            }
+        }
+
+        async function loadAgentPrompt() {
+            if (!currentUser) {
+                document.getElementById('promptContent').textContent = 'Please log in first.';
+                return;
+            }
+            
+            document.getElementById('promptContent').textContent = 'Loading...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/agent/prompt?user_id=${currentUser.id}`);
+                const data = await response.json();
+                
+                let content = `╔═══════════════════════════════════════════════════╗\n`;
+                content += `║        SYNKI AGENT PROMPT VIEWER                  ║\n`;
+                content += `╚═══════════════════════════════════════════════════╝\n\n`;
+                
+                // Profile section
+                content += `📋 PROFILE SETTINGS:\n`;
+                content += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+                content += `   Mode: ${data.profile.mode}\n`;
+                content += `   Language: ${data.profile.language_style}\n`;
+                content += `   Tone: ${data.profile.tone}\n`;
+                content += `   Question Limit: ${data.profile.question_limit}\n\n`;
+                
+                // Context Data section
+                if (data.context_data) {
+                    content += `🧠 CONTEXT BUILDER DATA:\n`;
+                    content += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+                    content += `   User: ${data.context_data.user_name || 'Unknown'}\n`;
+                    content += `   Mood: ${data.context_data.current_mood}\n`;
+                    content += `   Stress: ${data.context_data.stress_level}\n`;
+                    content += `   Time: ${data.context_data.time_of_day}\n`;
+                    content += `   Hint: ${data.context_data.time_based_hint || 'None'}\n`;
+                    content += `   Summaries: ${data.context_data.recent_summaries_count} loaded\n`;
+                    
+                    if (data.context_data.questions_already_asked?.length > 0) {
+                        content += `   Questions Asked: ${data.context_data.questions_already_asked.join(', ')}\n`;
+                    }
+                    if (data.context_data.conversation_flow?.length > 0) {
+                        content += `   Flow: ${data.context_data.conversation_flow.join(' → ')}\n`;
+                    }
+                    if (Object.keys(data.context_data.likes || {}).length > 0) {
+                        content += `   Likes: ${JSON.stringify(data.context_data.likes)}\n`;
+                    }
+                    if (Object.keys(data.context_data.dislikes || {}).length > 0) {
+                        content += `   Dislikes: ${JSON.stringify(data.context_data.dislikes)}\n`;
+                    }
+                    if (data.context_data.behavior_hint) {
+                        content += `   Behavior: ${data.context_data.behavior_hint}\n`;
+                    }
+                    if (data.context_data.contextual_suggestion) {
+                        content += `   Suggestion: ${data.context_data.contextual_suggestion}\n`;
+                    }
+                    content += '\n';
+                }
+                
+                // Memory Facts
+                if (data.memory_facts && data.memory_facts.length > 0) {
+                    content += `📝 MEMORY FACTS:\n`;
+                    content += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+                    data.memory_facts.forEach((fact, i) => {
+                        content += `   ${i+1}. ${fact}\n`;
+                    });
+                    content += '\n';
+                }
+                
+                // System Prompt
+                content += `🤖 SYSTEM PROMPT (Base):\n`;
+                content += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+                content += data.system_prompt + '\n\n';
+                
+                // Context Injection (the SMART part!)
+                content += `✨ CONTEXT INJECTION (Smart Context Builder):\n`;
+                content += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+                if (data.context_injection) {
+                    content += data.context_injection + '\n';
+                } else {
+                    content += '   [No context injection available]\n';
+                }
+                
+                document.getElementById('promptContent').textContent = content;
+            } catch (e) {
+                document.getElementById('promptContent').textContent = `Error loading prompt: ${e.message}`;
+            }
+        }
+
+        // Register service worker
+        async function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                try {
+                    const registration = await navigator.serviceWorker.register('/sw.js');
+                    console.log('Service Worker registered:', registration.scope);
+                    
+                    // Request notification permission
+                    if ('Notification' in window && Notification.permission === 'default') {
+                        Notification.requestPermission();
+                    }
+                } catch (e) {
+                    console.log('Service Worker registration failed:', e);
+                }
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
