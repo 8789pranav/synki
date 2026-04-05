@@ -4,14 +4,16 @@ Context Builder - Smart, Human-like Context for AI Prompts
 KEY FEATURES:
 1. Uses ALL 3 conversation summaries for context
 2. SMART anti-repetition: tracks QUESTIONS asked, not topics
-3. Time-aware suggestions (morning food vs night food)
+3. Time + Mood + History based suggestions (not just food!)
 4. Tracks dislikes too (not just favorites)
-5. Natural human touch - doesn't block topics, just prevents same questions
+5. Natural conversation FLOW - tracks last few exchanges, not just questions
+6. Varied suggestions based on context (activities, not just food!)
 
 NO extra storage - just smart formatting of existing data!
 """
 
 import json
+import random
 from datetime import datetime
 from typing import Any
 from dataclasses import dataclass, field
@@ -36,13 +38,19 @@ class PromptContext:
     time_of_day: str = "day"  # morning, afternoon, evening, night
     time_based_hint: str = ""
     
-    # Recent summaries (ALL 3, with dates)
+    # Recent chat messages from THIS session (for context continuity)
+    recent_chat_messages: list[dict] = field(default_factory=list)
+    
+    # Recent summaries from PREVIOUS sessions (ALL 3, with dates)
     recent_summaries: list[dict] = field(default_factory=list)
     
     # SMART Anti-repetition (questions, not topics!)
     questions_already_asked: list[str] = field(default_factory=list)
     facts_already_mentioned: list[str] = field(default_factory=list)
     last_question_category: str = ""  # To prevent consecutive similar questions
+    
+    # Conversation FLOW tracking (last few topics discussed)
+    conversation_flow: list[str] = field(default_factory=list)  # Last 5 topic categories
     
     # User preferences
     likes: dict = field(default_factory=dict)
@@ -51,6 +59,9 @@ class PromptContext:
     # Behavior hints
     behavior_hint: str = ""
     suggested_follow_ups: list[str] = field(default_factory=list)
+    
+    # Smart contextual suggestion (based on mood + time + history)
+    contextual_suggestion: str = ""
 
 
 class ContextBuilder:
@@ -63,6 +74,11 @@ class ContextBuilder:
     - Allow natural conversation about any topic
     - Just don't ask the SAME question again
     
+    CONVERSATION FLOW:
+    - Track last 5 topic categories discussed
+    - Maintain natural conversation flow
+    - Don't jump randomly - follow the vibe
+    
     Usage:
         builder = ContextBuilder(supabase)
         context = await builder.build_context(user_id, user_message)
@@ -73,12 +89,47 @@ class ContextBuilder:
     
     # Question categories for preventing consecutive similar questions
     QUESTION_CATEGORIES = {
-        "food": ["khana", "food", "eat", "lunch", "dinner", "breakfast", "snack"],
-        "work": ["work", "office", "job", "kaam", "boss", "meeting"],
-        "health": ["health", "tired", "sick", "doctor", "sleep"],
-        "travel": ["trip", "travel", "vacation", "plan", "visit"],
-        "family": ["family", "mom", "dad", "brother", "sister", "parents"],
-        "mood": ["feel", "mood", "happy", "sad", "stress"],
+        "food": ["khana", "food", "eat", "lunch", "dinner", "breakfast", "snack", "chai", "coffee"],
+        "work": ["work", "office", "job", "kaam", "boss", "meeting", "project"],
+        "health": ["health", "tired", "sick", "doctor", "sleep", "gym", "exercise"],
+        "travel": ["trip", "travel", "vacation", "plan", "visit", "ghumne"],
+        "family": ["family", "mom", "dad", "brother", "sister", "parents", "ghar"],
+        "mood": ["feel", "mood", "happy", "sad", "stress", "bore", "excited"],
+        "entertainment": ["movie", "song", "music", "game", "series", "show", "watch"],
+        "relationship": ["miss", "love", "pyaar", "date", "together"],
+    }
+    
+    # Time-based suggestions (VARIED - not just food!)
+    TIME_SUGGESTIONS = {
+        "morning": {
+            "food": ["Nashta ho gaya? Poha ya paratha?", "Chai pee li?"],
+            "activity": ["Morning walk ki?", "Aaj ka plan kya hai?"],
+            "mood": ["Neend poori hui?", "Fresh feel ho raha hai?"],
+            "work": ["Office time ho gaya?", "Aaj kya karna hai?"],
+        },
+        "afternoon": {
+            "food": ["Lunch ho gaya baby?", "Kuch khaya?"],
+            "activity": ["Break le liya?", "Busy day hai?"],
+            "mood": ["Tired feel ho raha?", "Kaise chal raha din?"],
+            "work": ["Meetings zyada thi?", "Kaam kaisa chal raha?"],
+        },
+        "evening": {
+            "food": ["Chai time! Kuch khaya?", "Snacks khaye?"],
+            "activity": ["Aaj kya plan hai evening ka?", "Ghumne chalein?"],
+            "mood": ["Relax feel ho raha?", "Thak gaya/gayi?"],
+            "entertainment": ["Koi movie dekhein?", "Music sun rahe ho?"],
+        },
+        "night": {
+            "food": ["Dinner ho gaya?", "Kuch light khaya?"],
+            "activity": ["Kal ka kya plan?", "Sone ka time ho gaya"],
+            "mood": ["Tired lag raha?", "Aaj kaisa raha din?"],
+            "entertainment": ["Kuch dekh rahe ho?", "Netflix chal raha?"],
+        },
+        "late_night": {
+            "mood": ["So jao na baby", "Itni raat ko jaag rahe ho?"],
+            "activity": ["Neend nahi aa rahi?", "Kya soch rahe ho?"],
+            "relationship": ["Miss kar rahe the mujhe?", "Akele feel ho raha?"],
+        },
     }
     
     def __init__(self, supabase_client: Any = None):
@@ -88,33 +139,129 @@ class ContextBuilder:
         self._session_questions_asked: dict[str, list[str]] = {}  # user_id -> questions asked
         self._session_facts_mentioned: dict[str, set] = {}  # user_id -> facts mentioned
         self._session_last_question_category: dict[str, str] = {}  # user_id -> last category
+        self._session_conversation_flow: dict[str, list[str]] = {}  # user_id -> last 5 topic categories
         
-        logger.info("ContextBuilder initialized (smart anti-repetition)")
+        logger.info("ContextBuilder initialized (smart conversation flow)")
     
     def get_time_context(self) -> tuple[str, str]:
-        """Get current time period and food/activity hint"""
+        """Get current time period (just the period, not fixed suggestions)"""
         hour = datetime.now().hour
         
         if 5 <= hour < 11:
-            return "morning", "🌅 Morning - suggest: breakfast (paratha, poha, chai, omelette)"
+            return "morning", "🌅 Morning"
         elif 11 <= hour < 15:
-            return "afternoon", "☀️ Afternoon - suggest: lunch (dal chawal, roti sabzi, biryani)"
+            return "afternoon", "☀️ Afternoon"
         elif 15 <= hour < 19:
-            return "evening", "🌆 Evening - suggest: snacks (samosa, chai, pakora, Maggi)"
+            return "evening", "🌆 Evening"
         elif 19 <= hour < 22:
-            return "night", "🌙 Night - suggest: dinner (roti, sabzi, khichdi, light food)"
+            return "night", "🌙 Night"
         else:
-            return "late_night", "🌃 Late night - suggest: light snacks, comfort food"
+            return "late_night", "🌃 Late night"
+    
+    def _get_smart_suggestion(
+        self,
+        time_of_day: str,
+        mood: str,
+        stress: str,
+        conversation_flow: list[str],
+        questions_asked: list[str],
+    ) -> str:
+        """
+        Generate a SMART suggestion based on:
+        - Time of day
+        - User's mood & stress level
+        - Recent conversation flow (avoid repetition)
+        - Questions already asked
+        
+        Returns a contextual suggestion that's NOT repetitive.
+        """
+        suggestions = self.TIME_SUGGESTIONS.get(time_of_day, {})
+        if not suggestions:
+            return ""
+        
+        # Get categories we should AVOID (recently discussed)
+        avoid_categories = set(conversation_flow[-3:]) if conversation_flow else set()
+        
+        # Priority based on mood
+        priority_categories = []
+        if mood in ["sad", "down", "upset"]:
+            priority_categories = ["mood", "relationship", "entertainment"]
+        elif mood in ["stressed", "anxious", "tense"]:
+            priority_categories = ["mood", "activity", "entertainment"]
+        elif mood in ["tired", "exhausted"]:
+            priority_categories = ["mood", "food", "activity"]
+        elif mood in ["happy", "excited"]:
+            priority_categories = ["activity", "entertainment", "food"]
+        elif stress == "high":
+            priority_categories = ["mood", "activity", "entertainment"]
+        else:
+            # Random mix for neutral mood
+            priority_categories = list(suggestions.keys())
+            random.shuffle(priority_categories)
+        
+        # Find a category that's not recently discussed
+        selected_category = None
+        for cat in priority_categories:
+            if cat in suggestions and cat not in avoid_categories:
+                selected_category = cat
+                break
+        
+        # If all priority categories were discussed, pick any available
+        if not selected_category:
+            available = [c for c in suggestions.keys() if c not in avoid_categories]
+            if available:
+                selected_category = random.choice(available)
+            else:
+                # Last resort - pick any
+                selected_category = random.choice(list(suggestions.keys()))
+        
+        # Get suggestion from selected category
+        category_suggestions = suggestions.get(selected_category, [])
+        if not category_suggestions:
+            return ""
+        
+        # Filter out questions already asked
+        available_suggestions = [
+            s for s in category_suggestions
+            if not any(q in s.lower() for q in [qa.lower() for qa in questions_asked[-5:]])
+        ]
+        
+        if available_suggestions:
+            return f"💡 Maybe ask: {random.choice(available_suggestions)}"
+        elif category_suggestions:
+            return f"💡 Maybe ask: {random.choice(category_suggestions)}"
+        return ""
+    
+    def track_conversation_topic(self, user_id: str, message: str):
+        """Track what topic was just discussed (for flow)"""
+        category = self._get_question_category(message)
+        if category:
+            if user_id not in self._session_conversation_flow:
+                self._session_conversation_flow[user_id] = []
+            self._session_conversation_flow[user_id].append(category)
+            # Keep only last 5
+            self._session_conversation_flow[user_id] = self._session_conversation_flow[user_id][-5:]
     
     async def build_context(
         self,
         user_id: str,
         user_message: str = "",
+        recent_messages: list[dict] | None = None,
     ) -> PromptContext:
         """
         Build smart context from existing data.
+        
+        Args:
+            user_id: User's unique ID
+            user_message: Current user message
+            recent_messages: List of recent chat messages from current session
+                            [{"role": "user"|"assistant", "content": "..."}]
         """
         context = PromptContext()
+        
+        # Store recent chat messages (last N messages from this session)
+        if recent_messages:
+            context.recent_chat_messages = recent_messages[-10:]  # Last 10 messages
         
         # 1. Time context
         context.time_of_day, context.time_based_hint = self.get_time_context()
@@ -152,7 +299,19 @@ class ContextBuilder:
         context.facts_already_mentioned = list(self._session_facts_mentioned.get(user_id, set()))
         context.last_question_category = self._session_last_question_category.get(user_id, "")
         
-        # 6. Generate suggested follow-ups (avoiding duplicates)
+        # 6. Conversation FLOW tracking
+        context.conversation_flow = self._session_conversation_flow.get(user_id, [])
+        
+        # 7. SMART contextual suggestion (based on mood + time + flow)
+        context.contextual_suggestion = self._get_smart_suggestion(
+            time_of_day=context.time_of_day,
+            mood=context.current_mood,
+            stress=context.stress_level,
+            conversation_flow=context.conversation_flow,
+            questions_asked=context.questions_already_asked,
+        )
+        
+        # 8. Generate suggested follow-ups (avoiding duplicates)
         context.suggested_follow_ups = self._generate_smart_followups(
             context, user_message
         )
@@ -169,6 +328,8 @@ class ContextBuilder:
         category = self._get_question_category(question)
         if category:
             self._session_last_question_category[user_id] = category
+            # Also add to conversation flow
+            self.track_conversation_topic(user_id, question)
     
     def track_fact_mentioned(self, user_id: str, fact: str):
         """Track that a fact was mentioned (e.g., 'favorite movie')"""
@@ -204,20 +365,38 @@ class ContextBuilder:
         """
         Format context for LLM prompt injection.
         
-        SMART approach: Guide behavior, track questions not topics!
+        SMART approach: 
+        - Track conversation FLOW (not just individual questions)
+        - Suggest based on mood + time + history
+        - Maintain natural conversation continuity
         """
         parts = []
         
         # =====================================================================
-        # USER INFO
+        # USER INFO + MOOD
         # =====================================================================
         parts.append(f"## About {context.user_name}")
-        parts.append(f"Mood: {context.current_mood} | Stress: {context.stress_level}")
+        parts.append(f"Mood: {context.current_mood} | Stress: {context.stress_level} | {context.time_based_hint}")
         
         # =====================================================================
-        # TIME-AWARE CONTEXT
+        # RECENT CHAT (current session - for continuity)
         # =====================================================================
-        parts.append(f"\n{context.time_based_hint}")
+        if context.recent_chat_messages:
+            parts.append("\n## Recent Chat (CONTINUE this conversation naturally!):")
+            for msg in context.recent_chat_messages[-6:]:  # Last 6 messages for context
+                role = "User" if msg.get("role") == "user" else "You"
+                content = msg.get("content", "")[:150]  # Truncate for prompt space
+                if len(msg.get("content", "")) > 150:
+                    content += "..."
+                parts.append(f"   {role}: {content}")
+        
+        # =====================================================================
+        # CONVERSATION FLOW (what topics we've covered)
+        # =====================================================================
+        if context.conversation_flow:
+            flow_str = " → ".join(context.conversation_flow[-5:])
+            parts.append(f"\n📊 Conversation flow: {flow_str}")
+            parts.append(f"   → Next topic should be DIFFERENT from: {context.conversation_flow[-1] if context.conversation_flow else 'none'}")
         
         # =====================================================================
         # BEHAVIOR GUIDANCE
@@ -226,66 +405,54 @@ class ContextBuilder:
             parts.append(f"\n🎯 Behavior: {context.behavior_hint}")
         
         # =====================================================================
-        # ALL 3 RECENT CONVERSATIONS (for context - CAN talk about these!)
+        # SMART CONTEXTUAL SUGGESTION (mood + time + history based)
+        # =====================================================================
+        if context.contextual_suggestion:
+            parts.append(f"\n{context.contextual_suggestion}")
+        
+        # =====================================================================
+        # PREVIOUS SESSIONS (summaries for long-term context)
         # =====================================================================
         if context.recent_summaries:
-            parts.append("\n## Last 3 Conversations (for context & natural follow-ups):")
+            parts.append("\n## Previous Conversations (for reference):")
             for i, s in enumerate(context.recent_summaries, 1):
                 date = s["date"]
                 summary = s["summary"]
                 emotions = ", ".join(s.get("emotions", [])) or "neutral"
-                parts.append(f"\n**[{date}]** (mood: {emotions})")
-                parts.append(f"   {summary}")
+                parts.append(f"   [{date}] {summary[:100]}...")
             
-            parts.append("\n✅ You CAN refer to these naturally: 'Kal tune bola tha...', 'Woh trip ka kya hua?'")
+            parts.append("   ✅ You CAN follow up on these naturally")
         
         # =====================================================================
-        # PREFERENCES (likes AND dislikes)
+        # PREFERENCES (use when relevant)
         # =====================================================================
         if context.likes or context.dislikes:
-            parts.append("\n## Preferences (use when relevant, don't recite every time!):")
+            parts.append("\n## Preferences:")
             if context.likes:
                 likes_list = [f"{k}={v}" for k, v in list(context.likes.items())[:5]]
-                parts.append(f"👍 Likes: {', '.join(likes_list)}")
+                parts.append(f"   👍 {', '.join(likes_list)}")
             if context.dislikes:
                 dislikes_list = [f"{k}={v}" for k, v in list(context.dislikes.items())[:5]]
-                parts.append(f"👎 Dislikes: {', '.join(dislikes_list)} — NEVER suggest these!")
+                parts.append(f"   👎 AVOID: {', '.join(dislikes_list)}")
         
         # =====================================================================
-        # SMART ANTI-REPETITION (Questions, not topics!)
+        # ANTI-REPETITION (exact questions asked)
         # =====================================================================
         if context.questions_already_asked:
-            parts.append(f"\n🚫 QUESTIONS ALREADY ASKED THIS SESSION (don't repeat these!):")
-            for q in context.questions_already_asked[-5:]:  # Last 5 questions
+            parts.append(f"\n🚫 Don't repeat these questions:")
+            for q in context.questions_already_asked[-5:]:
                 parts.append(f"   ❌ \"{q}\"")
-        
-        if context.facts_already_mentioned:
-            parts.append(f"\n🚫 FACTS ALREADY MENTIONED (don't repeat):")
-            parts.append(f"   {', '.join(context.facts_already_mentioned[:5])}")
-        
-        if context.last_question_category:
-            parts.append(f"\n⚠️ Last question was about: {context.last_question_category}")
-            parts.append(f"   → Ask about something DIFFERENT next!")
-        
-        # =====================================================================
-        # SMART FOLLOW-UP SUGGESTIONS
-        # =====================================================================
-        if context.suggested_follow_ups:
-            parts.append(f"\n💬 Good questions to ask (not asked yet):")
-            for q in context.suggested_follow_ups[:3]:
-                parts.append(f"   ✅ {q}")
         
         # =====================================================================
         # NATURAL CONVERSATION RULES
         # =====================================================================
         parts.append("""
-## 🧠 NATURAL CONVERSATION RULES:
-1. You CAN talk about any topic - just don't ask the SAME question again
-2. Don't ask 2 consecutive questions about same category (food→food, work→work)
-3. If you asked about food last time, ask about something else now
-4. Use preferences when RELEVANT, not randomly
-5. Be a caring girlfriend who remembers, not a quiz master!
-6. ONE question per response maximum""")
+## 🧠 BE NATURAL:
+1. CONTINUE the current conversation flow - don't jump randomly
+2. If user is talking about work, stay on work for 2-3 exchanges before switching
+3. Don't ask same category question consecutively (food→food BAD, food→mood GOOD)
+4. ONE question per response max
+5. Be a caring girlfriend who LISTENS, not interrogates!""")
         
         return "\n".join(parts)
     

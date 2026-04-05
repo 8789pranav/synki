@@ -233,14 +233,16 @@ class CompanionAssistant(Agent):
             if self.ctx_builder:
                 try:
                     # Build context from existing data (no new storage!)
+                    # Pass recent chat messages for current session context
                     prompt_context = await self.ctx_builder.build_context(
                         user_id=self.user_id,
                         user_message=user_text,
+                        recent_messages=self._conversation_buffer,  # Current session chat
                     )
                     
                     # Format for prompt
                     context_text = self.ctx_builder.format_for_prompt(prompt_context)
-                    logger.info(f"📝 Context built: mood={prompt_context.current_mood}, questions_asked={len(prompt_context.questions_already_asked)}")
+                    logger.info(f"📝 Context built: mood={prompt_context.current_mood}, questions_asked={len(prompt_context.questions_already_asked)}, chat_msgs={len(prompt_context.recent_chat_messages)}")
                     
                 except Exception as e:
                     logger.warning(f"Context build error: {e}")
@@ -822,11 +824,16 @@ async def handle_session(ctx: agents.JobContext):
                 })
                 
                 # ============================================================
-                # ANTI-REPETITION: Track questions AI asked
+                # CONVERSATION FLOW TRACKING
                 # ============================================================
-                if role == "assistant" and assistant.ctx_builder and user_id:
-                    # Check if AI asked a question (ends with ?)
-                    if "?" in text:
+                if assistant.ctx_builder and user_id:
+                    # Track USER messages for conversation flow
+                    if role == "user":
+                        assistant.ctx_builder.track_conversation_topic(user_id, text)
+                        logger.debug(f"📊 Tracked user topic in flow")
+                    
+                    # Track ASSISTANT questions for anti-repetition
+                    elif role == "assistant" and "?" in text:
                         # Extract the question part
                         sentences = text.replace("!", ".").replace("।", ".").split(".")
                         for sentence in sentences:
