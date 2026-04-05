@@ -41,6 +41,19 @@ from .summary_generator import SummaryGenerator
 from .proactive_memory import ProactiveMemoryPrompter, MemoryPrompt, MemoryTopic
 from .enhanced_orchestrator import EnhancedOrchestrator, create_orchestrator
 
+# User profile components
+from .user_profile import (
+    UserProfileService,
+    ShortTermProfile,
+    LongTermProfile,
+    ProfileAnalyzer,
+    PersonalityTrait,
+    EmotionPattern,
+    CommunicationStyle,
+    SupportPreference,
+)
+from .profile_scheduler import ProfileScheduler
+
 __all__ = [
     # Original components
     "ContextManager",
@@ -75,4 +88,15 @@ __all__ = [
     "ProactiveMemoryPrompter",
     "MemoryPrompt",
     "MemoryTopic",
+    
+    # User profile system
+    "UserProfileService",
+    "ShortTermProfile",
+    "LongTermProfile",
+    "ProfileAnalyzer",
+    "ProfileScheduler",
+    "PersonalityTrait",
+    "EmotionPattern",
+    "CommunicationStyle",
+    "SupportPreference",
 ]

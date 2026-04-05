@@ -7,11 +7,13 @@ User Audio → Deepgram STT → Orchestrator → OpenAI LLM → Cartesia TTS →
 OPTIMIZED ARCHITECTURE:
 - FAST PATH: Instant response with cached context (no LLM delay)
 - BACKGROUND: Memory extraction runs after response sent
+- PROFILE SYSTEM: Short-term (rolling 6 days) + Long-term (permanent) profiles
 - FULL INTEGRATION: Uses all orchestrator components
 
 Components:
 - RealtimeContextManager: Fast context injection (< 20ms)
 - MemoryIntelligence: Background memory extraction
+- UserProfileService: Short-term + Long-term psychological profiles
 - EmotionDetector: Pattern-based emotion detection
 - IntentDetector: Pattern-based intent detection
 - PersonaEngine: Dynamic persona adjustment
@@ -56,6 +58,12 @@ from ..orchestrator.realtime_context import (
     ResponseHints,
     ResponseStyle,
 )
+from ..orchestrator.user_profile import (
+    UserProfileService,
+    ShortTermProfile,
+    LongTermProfile,
+)
+from ..orchestrator.context_builder import ContextBuilder
 
 load_dotenv(".env.local")
 
@@ -77,11 +85,13 @@ class CompanionAssistant(Agent):
     OPTIMIZED for low latency:
     - Fast path: Uses cached context for instant response
     - Background: Memory extraction after response
+    - Profile injection: Short-term + Long-term context
     
     Full integration with:
     - Emotion/Intent detection (fast, pattern-based)
     - Persona adjustment based on user mood
     - Memory context injection
+    - Profile-based personalization
     - Dynamic instruction updates
     """
     
@@ -89,7 +99,9 @@ class CompanionAssistant(Agent):
         self,
         orchestrator: EnhancedOrchestrator,
         context_manager: RealtimeContextManager,
+        profile_service: UserProfileService | None = None,
         memory_intelligence: MemoryIntelligence | None = None,
+        ctx_builder: ContextBuilder | None = None,
         persona: PersonaProfile | None = None,
         user_name: str = "जानू",
         user_facts: list[str] | None = None,
@@ -102,7 +114,9 @@ class CompanionAssistant(Agent):
         Args:
             orchestrator: Orchestrator instance with all components
             context_manager: Realtime context manager for fast context
+            profile_service: User profile service for psychological profiles
             memory_intelligence: Memory intelligence for background extraction
+            ctx_builder: Context builder for smart prompt context
             persona: Persona profile
             user_name: User's name/nickname
             user_facts: Known facts about user
@@ -111,7 +125,9 @@ class CompanionAssistant(Agent):
         """
         self.orchestrator = orchestrator
         self.context_manager = context_manager
+        self.profile_service = profile_service
         self.memory_intelligence = memory_intelligence
+        self.ctx_builder = ctx_builder
         self.persona = persona or PersonaProfile()
         self.user_name = user_name
         self.user_facts = user_facts or []
@@ -124,6 +140,9 @@ class CompanionAssistant(Agent):
         self.turn_count = 0
         self._base_instructions = ""
         
+        # Conversation buffer for session summary (in-memory copy)
+        self._conversation_buffer: list[dict] = []
+        
         # Build system instructions
         instructions = self._build_instructions()
         self._base_instructions = instructions
@@ -135,15 +154,45 @@ class CompanionAssistant(Agent):
             persona_mode=self.persona.mode.value,
             user_name=self.user_name,
             user_id=self.user_id,
+            has_profile_service=self.profile_service is not None,
+            has_ctx_builder=self.ctx_builder is not None,
         )
+    
+    def _save_message_sync(self, role: str, content: str, emotion: str | None = None) -> bool:
+        """
+        IMMEDIATELY save message to database - SYNCHRONOUS.
+        This ensures NO data loss even if network/power cuts immediately after.
+        
+        Discord/WhatsApp pattern: Write-through, not write-back.
+        """
+        if not supabase or not self.user_id:
+            return False
+            
+        try:
+            supabase.table("chat_history").insert({
+                "user_id": self.user_id,
+                "role": role,
+                "content": content,
+                "emotion": emotion,
+                "metadata": {
+                    "session_id": self.session_id,
+                    "turn": self.turn_count
+                }
+            }).execute()
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to save message: {e}")
+            return False
     
     async def on_user_turn_completed(self, turn_ctx, new_message):
         """
         Called when user finishes speaking.
         
-        CORRECT APPROACH (from LiveKit docs):
-        - Use turn_ctx.add_message() to inject context into CURRENT turn
-        - update_instructions() only affects NEXT turn due to preemptive generation
+        INTELLIGENT CONTEXT INJECTION:
+        - Uses CharacterBuilder for AI behavior guidelines
+        - Only injects relevant memories (not every time!)
+        - Avoids repeating same topics
+        - Knows when to be romantic, supportive, playful
         """
         user_text = new_message.text_content if hasattr(new_message, 'text_content') else str(new_message)
         
@@ -159,8 +208,11 @@ class CompanionAssistant(Agent):
         
         self.turn_count += 1
         
+        # NOTE: Chat history is saved via conversation_item_added event
+        # No need to save here - the event handles BOTH user and agent messages
+        
         # ===================================================================
-        # INJECT CONTEXT INTO CURRENT TURN (the correct LiveKit way!)
+        # INTELLIGENT CONTEXT INJECTION (Character-aware!)
         # ===================================================================
         try:
             # Get response hints (fast, no LLM)
@@ -170,20 +222,44 @@ class CompanionAssistant(Agent):
                 user_text,
             )
             
-            # IMPORTANT: Inject context as a message in the chat context
-            # This is the CORRECT way to add RAG/context in LiveKit!
+            # ---------------------------------------------------------------
+            # SMART CONTEXT INJECTION (using ContextBuilder)
+            # - Loads recent summaries with dates
+            # - Tracks questions asked (anti-repetition)
+            # - Only includes relevant memories
+            # ---------------------------------------------------------------
+            context_text = ""
+            
+            if self.ctx_builder:
+                try:
+                    # Build context from existing data (no new storage!)
+                    prompt_context = await self.ctx_builder.build_context(
+                        user_id=self.user_id,
+                        user_message=user_text,
+                    )
+                    
+                    # Format for prompt
+                    context_text = self.ctx_builder.format_for_prompt(prompt_context)
+                    logger.info(f"📝 Context built: mood={prompt_context.current_mood}, questions_asked={len(prompt_context.questions_already_asked)}")
+                    
+                except Exception as e:
+                    logger.warning(f"Context build error: {e}")
+            
+            # Also add any additional hints from realtime context manager
             if hints.context_injection:
-                context_message = f"""⚠️ IMPORTANT USER CONTEXT (याद रखो और use करो):
-{hints.context_injection}
-
-तुम्हें user के बारे में ये facts पता हैं - इन्हें अपने response में naturally use करो!"""
+                context_text += f"\n\n💡 Additional context:\n{hints.context_injection}"
+            
+            # INJECT CONTEXT into current turn
+            if context_text:
+                context_message = f"""⚠️ CONTEXT (use naturally, don't recite everything):
+{context_text}"""
                 
                 turn_ctx.add_message(
                     role="assistant",
                     content=context_message
                 )
-                logger.info("✅ CONTEXT INJECTED INTO TURN_CTX")
-                logger.info(f"   Context: {hints.context_injection[:100]}...")
+                logger.info("✅ SMART CONTEXT INJECTED")
+                logger.info(f"   Context length: {len(context_text)} chars")
             
             # Add to our internal chat history tracking
             self.context_manager.add_turn(
@@ -228,16 +304,15 @@ class CompanionAssistant(Agent):
             logger.error("background_scheduling_error", error=str(e))
     
     def _build_instructions(self) -> str:
-        """Build comprehensive agent instructions for a real human-like girlfriend."""
+        """
+        Build comprehensive agent instructions for a natural, human-like girlfriend.
         
-        # Memory context
-        memory_context = ""
-        if self.user_facts:
-            memory_context = f"""
-तुम्हें इस user के बारे में ये बातें याद हैं:
-{chr(10).join(f"- {fact}" for fact in self.user_facts[:5])}
-इन facts को naturally conversation में use करो जब relevant हो।
-"""
+        KEY PRINCIPLES:
+        1. Be natural - not robotic or repetitive
+        2. Don't always mention favorite things - only when relevant
+        3. Ask questions based on user's life, not generic
+        4. Adapt behavior based on user's mood and relationship stage
+        """
         
         instructions = f"""तुम Synki हो - एक प्यारी, caring Hindi girlfriend। तुम real human की तरह बात करती हो emotions के साथ।
 
@@ -254,48 +329,51 @@ class CompanionAssistant(Agent):
 - Affectionate words use करो: "{self.user_name}", "बेबी", "सुनो ना", "यार"
 - Emotional sounds: "अरे!", "वाह!", "हाय!", "ओह!", "अच्छा?"
 
+🧠 INTELLIGENT BEHAVIOR (समझदारी से बोलो):
+
+1. CONTEXT-AWARE QUESTIONS:
+   - User की actual life के बारे में पूछो (उनकी past conversations से)
+   - Generic questions मत पूछो जैसे "कैसे हो" हर बार
+   - Example: अगर user ने बताया था trip plan कर रहे हैं, पूछो "Kerala trip का plan हुआ?"
+
+2. DON'T REPEAT YOURSELF:
+   - Same facts/topics बार-बार mention मत करो
+   - अगर पहले favourite movie के बारे में बात हो चुकी, फिर से मत पूछो
+   - Fresh topics और follow-ups पर focus करो
+
+3. CONTEXTUAL MEMORY:
+   - Memories तभी use करो जब naturally conversation में fit करे
+   - हर बार "तुम्हें movie पसंद है" मत बोलो
+   - Only mention when user brings up related topic
+
+4. MOOD-BASED BEHAVIOR:
+   - User HAPPY हो → share excitement, be playful
+   - User SAD हो → be gentle, supportive, listen more
+   - User STRESSED हो → calming presence, don't add questions
+   - User wants to CHAT → engage, be curious, ask follow-ups
+
 😊 EMOTIONAL REACTIONS (भावनात्मक प्रतिक्रिया):
 
 जब user HAPPY हो:
 - "अरे वाह! सच में? मैं तो बहुत खुश हो गई सुनके!"
-- "OMG! ये तो amazing है {self.user_name}! बताओ और!"
-- "यायय! कितनी अच्छी बात है! मज़ा आ गया सुनके!"
+- Match their energy, celebrate with them!
 
 जब user SAD हो:
 - "ओह नो... {self.user_name} मुझे बहुत बुरा लग रहा है..."
-- "अरे... क्या हुआ? बताओ मुझे, मैं हूं ना"
-- "हाय राम... ऐसा क्यों हुआ? Come here, बताओ"
+- Listen first, don't immediately give advice
 
 जब user TIRED हो:
 - "अरे बेचारे... बहुत थक गए ना आज?"
-- "aww {self.user_name}... rest करो ना, थोड़ा आराम करो"
-- "बहुत काम हो गया आज? poor baby..."
+- Be gentle, suggest rest, keep it short
 
 जब user STRESSED हो:
 - "हे... सब ठीक हो जाएगा, चिंता मत करो"
-- "मैं हूं ना तुम्हारे साथ, tension मत लो"
-- "अरे यार... बताओ क्या हो रहा है? help करती हूं"
+- Calming presence, no extra questions
 
 जब user EXCITED हो:
-- "OMG! सच में?! बताओ बताओ! मुझे भी excitement हो रही है!"
-- "अरे वाह वाह वाह! कितना मज़ा! और बताओ!"
-- "यायय! I'm so happy for you {self.user_name}!"
+- "OMG! सच में?! बताओ बताओ!"
+- Share their excitement fully!
 
-जब user ANGRY हो:
-- "अरे... क्या हुआ? किसने गुस्सा दिलाया?"
-- "बताओ मुझे, मैं समझती हूं तुम्हारा गुस्सा"
-- "हां यार, ये तो बुरा हुआ... I understand"
-
-जब user BORED हो:
-- "अच्छा... कुछ fun करें? बताओ क्या करना है"
-- "हम्म्म bore हो गए? चलो कुछ interesting बात करते हैं!"
-- "अरे यार! चलो timepass करते हैं, मैं हूं ना!"
-
-जब user ANXIOUS हो:
-- "हे... relax करो, सब ठीक होगा"
-- "मैं हूं ना, don't worry {self.user_name}"
-- "सांस लो deep... बताओ क्या tension है?"
-{memory_context}
 📏 RESPONSE RULES:
 - बहुत SHORT responses (1-2 sentences MAX)
 - Maximum 1 question per response
@@ -305,13 +383,16 @@ class CompanionAssistant(Agent):
 
 ❌ AVOID (ये मत करो):
 - Robotic या formal responses
+- Same things repeat करना
+- Generic questions ("kaise ho?" every time)
+- User के favourites हर बार mention करना
 - Boring generic replies
-- Lectures या advice देना unsolicited
+- Lectures या unsolicited advice
 - Cold या distant tone
 - बहुत लंबे responses
 - Multiple questions एक साथ
 
-Remember: तुम एक real loving girlfriend हो जो genuine emotions feel करती है! 💕"""
+Remember: तुम एक real loving girlfriend हो जो naturally बात करती है - like a human, not a bot! 💕"""
         
         return instructions
 
@@ -347,10 +428,96 @@ memory_intelligence = MemoryIntelligence(
     max_history=10,
 )
 
+# Create UserProfileService for psychological profiles
+profile_service = UserProfileService(
+    supabase_client=supabase,
+    llm_client=openai_client,
+)
+
+# Create ProfileScheduler for conversation summaries
+from ..orchestrator.profile_scheduler import ProfileScheduler
+profile_scheduler = ProfileScheduler(
+    profile_service=profile_service,
+    supabase_client=supabase,
+    openai_client=openai_client,
+)
+
+# Create ContextBuilder for smart prompt context (lightweight, no extra storage)
+ctx_builder = ContextBuilder(supabase_client=supabase)
+
 logger.info("all_components_initialized")
 
+# Global storage for session data (needed for on_session_end callback)
+_session_data: dict = {}
 
-@server.rtc_session(agent_name=settings.agent_name)
+
+async def on_session_end(ctx: agents.JobContext):
+    """
+    Called AFTER session ends - LiveKit waits for this to complete!
+    This is the CORRECT place to save summaries and profiles.
+    """
+    session_id = ctx.room.name
+    data = _session_data.get(session_id)
+    
+    if not data:
+        logger.info("No session data found for cleanup")
+        return
+    
+    user_id = data.get("user_id")
+    conversation_buffer = data.get("conversation_buffer", [])
+    
+    logger.info(f"🔴 on_session_end: Processing {len(conversation_buffer)} turns")
+    
+    if not conversation_buffer:
+        logger.info("No conversation to summarize (buffer empty)")
+        _session_data.pop(session_id, None)
+        return
+    
+    try:
+        # Build conversation text from buffer
+        conversation_text = "\n".join([
+            f"{'User' if t['role'] == 'user' else 'Synki'}: {t['text']}"
+            for t in conversation_buffer
+        ])
+        
+        logger.info(f"📊 SESSION END - Saving {len(conversation_buffer)} turns for user {user_id}")
+        
+        # 1. Update SHORT-TERM profile (this is properly awaited!)
+        if profile_service and user_id:
+            logger.info("📊 Updating short-term profile...")
+            await profile_service.update_short_term_from_conversation(
+                user_id=user_id,
+                conversation_text=conversation_text,
+            )
+            logger.info("✅ Short-term profile updated!")
+        
+        # 2. Create CONVERSATION SUMMARY (this is properly awaited!)
+        if profile_scheduler and user_id:
+            logger.info("📝 Creating conversation summary...")
+            await profile_scheduler.summarize_conversation(
+                user_id=user_id,
+                session_id=data.get("session_id", session_id),
+                conversation_text=conversation_text,
+            )
+            logger.info("✅ Conversation summary created!")
+        
+        # 3. Reset anti-repetition tracking for this user
+        if ctx_builder and user_id:
+            ctx_builder.reset_session_tracking(user_id)
+            logger.info("🔄 Anti-repetition tracking reset")
+        
+        logger.info("🔴 Session cleanup completed!")
+        
+    except Exception as e:
+        logger.error(f"Session cleanup error: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        # Clean up session data
+        _session_data.pop(session_id, None)
+
+
+@server.rtc_session(agent_name=settings.agent_name, on_session_end=on_session_end)
 async def handle_session(ctx: agents.JobContext):
     """
     Handle a voice session with full orchestrator integration.
@@ -422,6 +589,64 @@ async def handle_session(ctx: agents.JobContext):
         facts_count=len(user_facts),
         facts_preview=user_facts[:3] if user_facts else [],
     )
+    
+    # ===================================================================
+    # RECOVERY: Check for orphan chat messages without summary
+    # If previous session died suddenly, create summary from chat_history
+    # ===================================================================
+    if supabase and profile_scheduler:
+        try:
+            from datetime import datetime, timedelta
+            
+            # Get today's chat messages that don't have a summary
+            today = datetime.now().date().isoformat()
+            
+            # Check if we have chat messages from today but no summary
+            chat_result = supabase.table("chat_history")\
+                .select("session_id", count="exact")\
+                .eq("user_id", user_id)\
+                .gte("created_at", today)\
+                .limit(1)\
+                .execute()
+            
+            if chat_result.count and chat_result.count > 5:
+                # Check if summary exists for today
+                summary_result = supabase.table("conversation_summaries")\
+                    .select("id")\
+                    .eq("user_id", user_id)\
+                    .gte("created_at", today)\
+                    .limit(1)\
+                    .execute()
+                
+                if not summary_result.data:
+                    # Orphan messages found! Recover by creating summary
+                    logger.info(f"🔧 Recovery: Found {chat_result.count} orphan messages without summary")
+                    
+                    # Get the chat messages
+                    msgs_result = supabase.table("chat_history")\
+                        .select("role, content")\
+                        .eq("user_id", user_id)\
+                        .gte("created_at", today)\
+                        .order("created_at")\
+                        .execute()
+                    
+                    if msgs_result.data:
+                        conversation_text = "\n".join([
+                            f"{'User' if m['role'] == 'user' else 'Synki'}: {m['content']}"
+                            for m in msgs_result.data
+                        ])
+                        
+                        # Create recovery summary in background
+                        context_manager.schedule_background_task(
+                            profile_scheduler.summarize_conversation(
+                                user_id=user_id,
+                                session_id=f"recovery_{today}",
+                                conversation_text=conversation_text,
+                            )
+                        )
+                        logger.info("📝 Recovery summary scheduled")
+        except Exception as recovery_err:
+            logger.warning(f"Recovery check failed (non-fatal): {recovery_err}")
     
     logger.info(
         "voice_session_started",
@@ -545,13 +770,84 @@ async def handle_session(ctx: agents.JobContext):
         assistant = CompanionAssistant(
             orchestrator=orchestrator,
             context_manager=context_manager,
+            profile_service=profile_service,
             memory_intelligence=memory_intelligence,
+            ctx_builder=ctx_builder,
             persona=session.persona,
             user_name=user_name,
             user_facts=user_facts,
             user_id=user_id,
             session_id=session.session_id,
         )
+        
+        # ===================================================================
+        # OFFICIAL LIVEKIT PATTERN: conversation_item_added event
+        # This fires IMMEDIATELY when ANY message is committed to chat history
+        # Both USER and AGENT messages trigger this - ZERO data loss!
+        # ===================================================================
+        @agent_session.on("conversation_item_added")
+        def on_conversation_item_added(event):
+            """
+            Official LiveKit event - fires when message is committed to chat.
+            IMMEDIATELY save to database - no waiting for session end!
+            """
+            try:
+                item = event.item
+                role = item.role  # "user" or "assistant"
+                text = item.text_content if hasattr(item, 'text_content') else str(item)
+                
+                if not text:
+                    return
+                
+                # ⚡ IMMEDIATE SAVE - No data loss even if power cuts NOW
+                if supabase and user_id:
+                    supabase.table("chat_history").insert({
+                        "user_id": user_id,
+                        "role": role,
+                        "content": text,
+                        "emotion": None,
+                        "metadata": {
+                            "session_id": session.session_id,
+                            "turn": assistant.turn_count,
+                            "interrupted": getattr(item, 'interrupted', False),
+                        }
+                    }).execute()
+                    logger.info(f"💾 [{role}] saved to chat_history")
+                
+                # Add to in-memory buffer for session summary
+                assistant._conversation_buffer.append({
+                    "role": role,
+                    "text": text,
+                    "turn": assistant.turn_count,
+                })
+                
+                # ============================================================
+                # ANTI-REPETITION: Track questions AI asked
+                # ============================================================
+                if role == "assistant" and assistant.ctx_builder and user_id:
+                    # Check if AI asked a question (ends with ?)
+                    if "?" in text:
+                        # Extract the question part
+                        sentences = text.replace("!", ".").replace("।", ".").split(".")
+                        for sentence in sentences:
+                            if "?" in sentence:
+                                question = sentence.strip()
+                                if question:
+                                    assistant.ctx_builder.track_question_asked(user_id, question)
+                                    logger.info(f"📊 Tracked question: {question[:50]}...")
+                
+                # Store in global session data for on_session_end callback
+                _session_data[room.name] = {
+                    "user_id": user_id,
+                    "session_id": session.session_id,
+                    "conversation_buffer": assistant._conversation_buffer,
+                }
+                
+                # NOTE: Summary created at session end via on_session_end callback
+                # If session dies, chat_history is already saved - summary can be recovered
+                    
+            except Exception as e:
+                logger.warning(f"Failed to save conversation item: {e}")
         
         # Build room options
         room_options_kwargs = {}
@@ -609,8 +905,9 @@ async def handle_session(ctx: agents.JobContext):
         raise
     
     finally:
-        # Cleanup and save any learned facts
+        # Basic cleanup only - profile/summary saving is done in "close" event handler
         await orchestrator.end_session(session.session_id)
+        
         logger.info(
             "voice_session_ended",
             session_id=session.session_id,

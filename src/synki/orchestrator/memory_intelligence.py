@@ -81,9 +81,10 @@ Analyze this message from the user and extract any personal facts worth remember
 
 EXTRACT:
 - Personal details (name, age, job, location)
-- Preferences (likes, dislikes, favorites)
+- LIKES and FAVORITES (favorite food, movie, place, etc.)
+- DISLIKES and things they HATE/AVOID (important to remember!)
 - Relationships (family, friends, significant other)
-- Health/fitness info
+- Health/fitness info, allergies
 - Daily routines and habits
 - Life events and milestones
 - Goals and aspirations
@@ -96,18 +97,29 @@ DO NOT EXTRACT:
 - Things already known (don't repeat)
 
 IMPORTANT RULES:
-- Use STANDARDIZED keys: favorite_food (not favorite_dish, favorite_cuisine for the same thing)
-- Use favorite_movie, favorite_song, favorite_actor, favorite_color, etc.
-- ONE fact per concept - don't create multiple entries for the same information
-- If user says "I like pizza" - use key "favorite_food", value "pizza"
-- If user says "my favorite movie is X" - use key "favorite_movie", value "X"
+- Use STANDARDIZED keys
+- Extract BOTH likes AND dislikes!
+- If user says "I hate karela" → dislike_food: karela
+- If user says "I don't like horror movies" → dislike_genre: horror
+- If user says "I can't eat spicy" → food_restriction: spicy
 
 STANDARDIZED KEYS TO USE:
+FOR LIKES:
 - name, age, birthday, location, job, company
 - favorite_food, favorite_movie, favorite_song, favorite_color, favorite_actor
+- favorite_place, favorite_cuisine, favorite_drink, favorite_game
 - hobby, interest, pet, relationship_status
+
+FOR DISLIKES (EQUALLY IMPORTANT!):
+- dislike_food (foods they hate/avoid)
+- dislike_genre (movie/music genres they dislike)
+- dislike_activity (activities they don't enjoy)
+- food_restriction (allergies, dietary restrictions)
+- avoid_topic (topics they don't like discussing)
+
+FOR RELATIONSHIPS:
 - family_member (with value like "brother: Rahul")
-- health_condition, allergy, fitness_goal
+- friend_name
 
 Respond in JSON format:
 {{
@@ -115,7 +127,7 @@ Respond in JSON format:
         {{
             "key": "standardized_key",
             "value": "the fact to remember",
-            "type": "preference|personal|relationship|health|interest|routine|emotional|event|goal|other",
+            "type": "preference|personal|relationship|health|interest|routine|emotional|event|goal|dislike|restriction",
             "importance": "critical|high|medium|low|skip",
             "confidence": 0.8
         }}

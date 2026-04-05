@@ -193,6 +193,163 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================================
+-- USER PROFILES - SHORT TERM
+-- Rolling 5-6 day behavioral snapshot
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS user_profiles_short_term (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
+    profile_data JSONB DEFAULT '{}',
+    -- Quick access fields for queries
+    dominant_mood TEXT,
+    mood_trend TEXT,
+    stress_level TEXT,
+    activity_level TEXT,
+    data_points INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for faster queries
+CREATE INDEX IF NOT EXISTS idx_short_term_user_id ON user_profiles_short_term(user_id);
+CREATE INDEX IF NOT EXISTS idx_short_term_updated ON user_profiles_short_term(updated_at DESC);
+
+-- Enable RLS
+ALTER TABLE user_profiles_short_term ENABLE ROW LEVEL SECURITY;
+
+-- Policies
+CREATE POLICY "Users can view own short-term profile" ON user_profiles_short_term
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own short-term profile" ON user_profiles_short_term
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own short-term profile" ON user_profiles_short_term
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Service role can manage all short-term profiles" ON user_profiles_short_term
+    FOR ALL USING (auth.role() = 'service_role');
+
+-- Trigger for updated_at
+CREATE TRIGGER update_short_term_profile_updated_at
+    BEFORE UPDATE ON user_profiles_short_term
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- USER PROFILES - LONG TERM
+-- Permanent psychological profile
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS user_profiles_long_term (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
+    profile_data JSONB DEFAULT '{}',
+    -- Quick access fields
+    personality_summary TEXT,
+    emotional_baseline TEXT,
+    confidence_score FLOAT DEFAULT 0,
+    conversations_analyzed INTEGER DEFAULT 0,
+    -- Important flags for quick reference
+    is_morning_person BOOLEAN,
+    dominant_traits TEXT[],
+    core_values TEXT[],
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for faster queries
+CREATE INDEX IF NOT EXISTS idx_long_term_user_id ON user_profiles_long_term(user_id);
+CREATE INDEX IF NOT EXISTS idx_long_term_confidence ON user_profiles_long_term(confidence_score DESC);
+
+-- Enable RLS
+ALTER TABLE user_profiles_long_term ENABLE ROW LEVEL SECURITY;
+
+-- Policies
+CREATE POLICY "Users can view own long-term profile" ON user_profiles_long_term
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own long-term profile" ON user_profiles_long_term
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own long-term profile" ON user_profiles_long_term
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Service role can manage all long-term profiles" ON user_profiles_long_term
+    FOR ALL USING (auth.role() = 'service_role');
+
+-- Trigger for updated_at
+CREATE TRIGGER update_long_term_profile_updated_at
+    BEFORE UPDATE ON user_profiles_long_term
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- CONVERSATION SUMMARIES
+-- For weekly analysis
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS conversation_summaries (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    session_id UUID REFERENCES sessions(id) ON DELETE SET NULL,
+    summary TEXT NOT NULL,
+    topics TEXT[],
+    emotions_detected TEXT[],
+    key_insights JSONB DEFAULT '{}',
+    analyzed_for_profile BOOLEAN DEFAULT FALSE,
+    conversation_date DATE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for weekly analysis queries
+CREATE INDEX IF NOT EXISTS idx_summaries_user_date ON conversation_summaries(user_id, conversation_date DESC);
+CREATE INDEX IF NOT EXISTS idx_summaries_not_analyzed ON conversation_summaries(user_id, analyzed_for_profile) 
+    WHERE analyzed_for_profile = FALSE;
+
+-- Enable RLS
+ALTER TABLE conversation_summaries ENABLE ROW LEVEL SECURITY;
+
+-- Policies
+CREATE POLICY "Users can view own summaries" ON conversation_summaries
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Service role can manage all summaries" ON conversation_summaries
+    FOR ALL USING (auth.role() = 'service_role');
+
+-- ============================================================================
+-- FUNCTION: Get weekly summaries for analysis
+-- ============================================================================
+CREATE OR REPLACE FUNCTION get_weekly_summaries_for_analysis(p_user_id UUID)
+RETURNS TABLE (
+    id UUID,
+    summary TEXT,
+    topics TEXT[],
+    emotions_detected TEXT[],
+    conversation_date DATE
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT cs.id, cs.summary, cs.topics, cs.emotions_detected, cs.conversation_date
+    FROM conversation_summaries cs
+    WHERE cs.user_id = p_user_id
+      AND cs.analyzed_for_profile = FALSE
+      AND cs.conversation_date >= CURRENT_DATE - INTERVAL '7 days'
+    ORDER BY cs.conversation_date ASC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================================
+-- FUNCTION: Mark summaries as analyzed
+-- ============================================================================
+CREATE OR REPLACE FUNCTION mark_summaries_analyzed(p_summary_ids UUID[])
+RETURNS VOID AS $$
+BEGIN
+    UPDATE conversation_summaries
+    SET analyzed_for_profile = TRUE
+    WHERE id = ANY(p_summary_ids);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================================
 -- GRANT PERMISSIONS
 -- ============================================================================
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
