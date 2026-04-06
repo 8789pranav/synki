@@ -24,7 +24,8 @@ logger = structlog.get_logger(__name__)
 
 class MemoryType(str, Enum):
     """Types of memories that can be extracted"""
-    PREFERENCE = "preference"      # "I like pizza", "I hate mornings"
+    PREFERENCE = "preference"      # "I like pizza"
+    DISLIKE = "dislike"            # "I hate mornings", "Don't like food talk"
     PERSONAL = "personal"          # Name, age, location, job
     RELATIONSHIP = "relationship"  # Family, friends, relationships
     HEALTH = "health"              # Health conditions, fitness
@@ -33,6 +34,8 @@ class MemoryType(str, Enum):
     EMOTIONAL = "emotional"        # Emotional states, feelings
     EVENT = "event"                # Life events, milestones
     GOAL = "goal"                  # Goals, aspirations
+    AVOID_TOPIC = "avoid_topic"    # Topics user doesn't want to discuss
+    CONVERSATION_STYLE = "conversation_style"  # How user likes to chat
     OTHER = "other"
 
 

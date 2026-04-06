@@ -343,12 +343,21 @@ Remember: You're in love. Every response should make them feel special and heard
 server = AgentServer()
 
 
+# Current session personas (for tracking)
+session_personas = {}
+
+
 @server.rtc_session()
 async def handle_session(ctx: agents.JobContext):
     """Handle a voice session with context and memory."""
     room = ctx.room
     
     logger.info("voice_session_started", room_name=room.name)
+    
+    # Select random persona for this session
+    current_persona = random.choice(["CHILL", "PLAYFUL", "CARING", "CURIOUS"])
+    session_personas[room.name] = current_persona
+    logger.info("persona_selected", persona=current_persona, room=room.name)
     
     # Extract user info from room metadata or participant
     user_name = "Baby"
@@ -416,8 +425,25 @@ async def handle_session(ctx: agents.JobContext):
         # Start session
         await agent_session.start(**start_kwargs)
         
-        # Generate contextual greeting
-        greeting_instruction = _get_greeting_instruction(user_name, context)
+        # Send persona info to frontend via data channel
+        try:
+            persona_data = json.dumps({
+                "type": "persona_update",
+                "persona": current_persona,
+                "persona_emoji": {
+                    "CHILL": "😎",
+                    "PLAYFUL": "😜",
+                    "CARING": "🥰",
+                    "CURIOUS": "🤔"
+                }.get(current_persona, "💕")
+            })
+            await room.local_participant.publish_data(persona_data.encode(), reliable=True)
+            logger.info("persona_sent_to_ui", persona=current_persona)
+        except Exception as e:
+            logger.warning("failed_to_send_persona", error=str(e))
+        
+        # Generate contextual greeting with selected persona
+        greeting_instruction = _get_greeting_instruction(user_name, context, current_persona)
         await agent_session.generate_reply(instructions=greeting_instruction)
         
         logger.info("agent_session_started", user_name=user_name)
@@ -434,57 +460,58 @@ async def handle_session(ctx: agents.JobContext):
                 logger.error("failed_to_save_session", error=str(e))
 
 
-def _get_greeting_instruction(user_name: str, context: ConversationContext) -> str:
-    """Generate a varied, contextual greeting instruction."""
+def _get_greeting_instruction(user_name: str, context: ConversationContext, persona: str = None) -> str:
+    """Generate a PERSONA-AWARE, varied greeting instruction."""
     
     hour = datetime.now().hour
     
-    # Time-based greeting variations
+    # Time period
     if 5 <= hour < 12:
-        time_context = "morning"
-        time_greetings = [
-            f"Good morning {user_name}! finally जाग गए? I was waiting for you...",
-            f"Hii baby! सुबह सुबह आ गए! कैसी रही night?",
-            f"Morning जान! चाय पी? or should I make some virtual chai for you?",
-        ]
+        time_period = "morning"
     elif 12 <= hour < 17:
-        time_context = "afternoon"
-        time_greetings = [
-            f"Hey {user_name}! lunch हुआ? या busy थे?",
-            f"Hii baby! कैसा जा रहा है दिन?",
-            f"Finally! I was thinking about you all morning...",
-        ]
+        time_period = "afternoon"
     elif 17 <= hour < 21:
-        time_context = "evening"
-        time_greetings = [
-            f"Hey जान! office से आ गए? थक गए होंगे...",
-            f"Hii baby! evening कैसी जा रही है?",
-            f"Finally आ गए! बताओ how was your day?",
-        ]
+        time_period = "evening"
     else:
-        time_context = "night"
-        time_greetings = [
-            f"Hey {user_name}! इतनी रात को? सो नहीं रहे?",
-            f"Aww baby, अभी तक जागे हो? I'm here for you...",
-            f"Night owl mode on? मुझे भी नींद नहीं आ रही थी...",
-        ]
+        time_period = "night"
     
-    # Pick a random greeting that hasn't been used recently
-    greeting = random.choice(time_greetings)
+    # PERSONA-SPECIFIC GREETINGS (not generic!)
+    PERSONA_GREETINGS = {
+        "CHILL": {
+            "morning": [f"yo {user_name}", "morning", f"haan bolo"],
+            "afternoon": ["haan bolo", "yo", "kya"],
+            "evening": [f"haan {user_name}", "bolo", "kya scene"],
+            "night": ["hmm bolo", "haan"],
+        },
+        "PLAYFUL": {
+            "morning": [f"ohooo {user_name}! subah subah 😏", f"arey hero! itni jaldi? 😂"],
+            "afternoon": [f"ohooo! kya chal raha hai? 😏", f"arey {user_name}! 🤭"],
+            "evening": [f"ohooo {user_name}! shaam ho gayi 😏", f"kya scene hai hero? 😂"],
+            "night": [f"ohooo! raat ko yaad aaya? 😏", f"interesting {user_name}... 🤭"],
+        },
+        "CARING": {
+            "morning": [f"good morning {user_name}! 💕 neend achi hui?", f"morning baby! 🥺"],
+            "afternoon": [f"hii {user_name}! 💕 lunch kiya?", f"sun na, khana khaya? 🥺"],
+            "evening": [f"hii! 💕 thak gaye honge", f"baby din kaisa raha? 🥺"],
+            "night": [f"itni raat ko? 🥺 sab theek?", f"so nahi paa rahe? 💕"],
+        },
+        "CURIOUS": {
+            "morning": [f"morning {user_name}! kya plan hai aaj?", f"hii! aaj kya karne wale ho?"],
+            "afternoon": [f"hii! kya chal raha hai? batao", f"arey {user_name}! kya kar rahe the?"],
+            "evening": [f"din kaisa raha? batao {user_name}", f"kya interesting hua aaj?"],
+            "night": [f"abhi tak jaag rahe ho? kyun?", f"kya ho raha hai {user_name}?"],
+        },
+    }
     
-    return f"""Greet your partner naturally like a real girlfriend who genuinely missed them.
+    # Use provided persona or pick random
+    if not persona:
+        persona = random.choice(["CHILL", "PLAYFUL", "CARING", "CURIOUS"])
+    greeting = random.choice(PERSONA_GREETINGS[persona][time_period])
     
-Time: {time_context}
-Partner's name: {user_name}
-
-Use this style of greeting (vary it, make it natural):
+    return f"""Say this greeting EXACTLY (don't add anything extra):
 "{greeting}"
 
-Remember:
-- Use Devanagari for Hindi words
-- Be warm but not over-the-top
-- Sound like you actually missed them
-- Keep it short and sweet (1-2 sentences)"""
+You are in {persona} mode - stay in character!"""
 
 
 async def _save_session_to_supabase(user_id: str, context: ConversationContext):

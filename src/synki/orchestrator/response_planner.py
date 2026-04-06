@@ -6,6 +6,7 @@ Decides between cached openers, short responses, or full LLM calls.
 """
 
 import random
+from datetime import datetime
 
 import structlog
 
@@ -22,42 +23,69 @@ from .persona_engine import PersonaEngine
 logger = structlog.get_logger(__name__)
 
 
+# ============================================================================
+# PERSONA-SPECIFIC GREETINGS (not generic!)
+# ============================================================================
+
+PERSONA_GREETINGS = {
+    "CHILL": {
+        "morning": ["yo", "morning", "haan bolo", "sup"],
+        "afternoon": ["haan", "bolo", "yo", "kya"],
+        "evening": ["haan bolo", "yo", "kya scene"],
+        "night": ["haan", "bolo", "hmm"],
+    },
+    "PLAYFUL": {
+        "morning": ["ohooo! subah subah yaad aaya 😏", "arre hero! itni jaldi? 😂", "good morning sunshine 🤭"],
+        "afternoon": ["ohooo! kya chal raha hai scene? 😏", "arey arey! kaun hai ye? 😂", "kya baat! yaad kiya 🤭"],
+        "evening": ["ohooo! shaam ho gayi aur ab yaad aaya? 😏", "arre kahan the hero? 😂"],
+        "night": ["ohooo! raat ko miss kiya? 😏", "itni raat ko? interesting 🤭"],
+    },
+    "CARING": {
+        "morning": ["good morning baby! 💕 neend achi hui?", "morning! 🥺 kaise ho aaj?", "subah ho gayi! dhoop mein mat jana 💕"],
+        "afternoon": ["hii baby! 💕 lunch kiya?", "sun na, khana khaya? 🥺", "arey! kaise ho? sab theek? 💕"],
+        "evening": ["hii! 💕 thak gaye honge aaj", "sun na, kaise raha din? 🥺", "shaam ho gayi, aaram karo 💕"],
+        "night": ["baby! itni raat ko? 🥺 sab theek?", "so nahi paa rahe? main hoon na 💕", "raat ho gayi, neend nahi aa rahi? 🥺"],
+    },
+    "CURIOUS": {
+        "morning": ["morning! kya plan hai aaj ka?", "hii! aaj kya karne wale ho?", "subah ho gayi! koi exciting plan?"],
+        "afternoon": ["hii! kya chal raha hai? batao", "arey! kya kar rahe the abhi?", "bolo bolo, kya scene hai?"],
+        "evening": ["hii! din kaisa raha? batao sab", "arey! kya interesting hua aaj?", "bolo, kya kiya aaj?"],
+        "night": ["arey! abhi tak jaag rahe ho? kyun?", "kya ho raha hai itni raat ko?", "neend nahi aa rahi? kyun?"],
+    },
+}
+
+# Memory-based greetings (when we know something about user)
+MEMORY_GREETINGS = {
+    "trip": ["arey! trip ka kya hua? plan final?", "waise wo trip plan, kab ja rahe ho?"],
+    "badminton": ["arey! badminton khela aaj?", "kya scene hai game ka?"],
+    "pubg": ["oye! PUBG khela aaj? 😏", "chicken dinner mila kya?"],
+    "brother": ["अनुराग से baat hui?", "bhai kaisa hai?"],
+    "work": ["office kaisa raha?", "kaam ka kya scene hai?"],
+    "health": ["medicine li aaj?", "dhyan rakha apna?"],
+}
+
+
 class ResponsePlanner:
     """Plans response strategy before LLM generation."""
     
-    # Quick responses that don't need LLM
+    # Quick responses that don't need LLM - NOW PERSONA-AWARE
     QUICK_RESPONSES = {
-        IntentType.GREETING: {
-            EmotionState.NEUTRAL: [
-                "hii! kaisa ja raha hai din?",
-                "hello! kya chal raha hai?",
-                "hiii! kaise ho aaj?",
-            ],
-            EmotionState.HAPPY: [
-                "hiiii! kya baat hai, mood accha lag raha hai!",
-                "hello! someone's happy today! bata bata",
-            ],
-            EmotionState.TIRED: [
-                "hii! thake hue lag rahe ho, sab theek?",
-                "hello! aaj tired lag rahe ho, kya hua?",
-            ],
-        },
         IntentType.FAREWELL: {
             EmotionState.NEUTRAL: [
-                "bye! take care 💕",
-                "accha, chal milte hain! bye",
-                "okay bye! baad mein baat karte hain",
+                "bye! 💕",
+                "chal, milte hain!",
+                "okay bye!",
             ],
             EmotionState.TIRED: [
-                "accha soja jaldi! good night 💕",
-                "bye! rest karo properly, okay?",
+                "soja jaldi! night 💕",
+                "bye! rest karo",
             ],
         },
     }
     
     # Filler responses for very short user inputs
     ACKNOWLEDGMENTS = [
-        "hmm...", "acha...", "I see...", "ohh...", "okay...",
+        "hmm...", "acha...", "ohh...", "okay...",
     ]
     
     def __init__(self, persona_engine: PersonaEngine | None = None):
@@ -69,6 +97,48 @@ class ResponsePlanner:
         """
         self.persona = persona_engine or PersonaEngine()
         self._last_strategy: ResponseStrategy | None = None
+        self._used_greetings: list[str] = []
+    
+    def _get_time_period(self) -> str:
+        """Get current time period."""
+        hour = datetime.now().hour
+        if 5 <= hour < 12:
+            return "morning"
+        elif 12 <= hour < 17:
+            return "afternoon"
+        elif 17 <= hour < 21:
+            return "evening"
+        else:
+            return "night"
+    
+    def _get_persona_greeting(self, persona: str, time_period: str, memories: list = None) -> str:
+        """Get a varied greeting based on persona, time, and memories."""
+        
+        # 30% chance to use memory-based greeting if we have relevant memories
+        if memories and random.random() < 0.3:
+            for mem in memories:
+                mem_lower = str(mem).lower()
+                for key, greetings in MEMORY_GREETINGS.items():
+                    if key in mem_lower:
+                        greeting = random.choice(greetings)
+                        if greeting not in self._used_greetings[-5:]:
+                            self._used_greetings.append(greeting)
+                            return greeting
+        
+        # Get persona-specific greeting
+        greetings = PERSONA_GREETINGS.get(persona, PERSONA_GREETINGS["CARING"])
+        time_greetings = greetings.get(time_period, greetings["afternoon"])
+        
+        # Avoid recently used
+        available = [g for g in time_greetings if g not in self._used_greetings[-3:]]
+        if not available:
+            available = time_greetings
+        
+        greeting = random.choice(available)
+        self._used_greetings.append(greeting)
+        self._used_greetings = self._used_greetings[-10:]
+        
+        return greeting
     
     def plan(
         self,
@@ -140,20 +210,32 @@ class ResponsePlanner:
         intent: IntentType,
         emotion: EmotionState,
         recent_responses: list[str] | None = None,
+        current_persona: str = None,
+        user_memories: list = None,
     ) -> str | None:
         """
         Get a quick cached response if available.
+        NOW PERSONA-AWARE for greetings!
         
         Args:
             intent: Detected intent
             emotion: Detected emotion
             recent_responses: Recent responses to avoid
+            current_persona: Current persona variant (CHILL/PLAYFUL/CARING/CURIOUS)
+            user_memories: User memories for contextual greetings
             
         Returns:
             Quick response string or None
         """
         recent = recent_responses or []
         
+        # GREETING: Use persona-specific greeting
+        if intent == IntentType.GREETING:
+            persona = current_persona or random.choice(["CHILL", "PLAYFUL", "CARING", "CURIOUS"])
+            time_period = self._get_time_period()
+            return self._get_persona_greeting(persona, time_period, user_memories)
+        
+        # For other intents, use standard quick responses
         if intent not in self.QUICK_RESPONSES:
             return None
         

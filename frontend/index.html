@@ -104,6 +104,11 @@
                 </div>
             </div>
             <div class="header-right">
+                <!-- CALL BUTTON IN HEADER -->
+                <button class="btn btn-call-header" id="headerCallBtn" title="Call Synki">
+                    <span class="call-icon">📞</span>
+                    <span class="call-text">Call</span>
+                </button>
                 <div class="user-profile" id="userProfile">
                     <div class="user-avatar" id="userAvatar">U</div>
                     <div class="user-info">
@@ -145,6 +150,18 @@
                             <span class="btn-icon">📞</span>
                             <span class="btn-text">End Call</span>
                         </button>
+                        <!-- SCHEDULE CALL BUTTON -->
+                        <button class="btn btn-schedule" id="scheduleCallBtn">
+                            <span class="btn-icon">⏰</span>
+                            <span class="btn-text">Schedule Call</span>
+                        </button>
+                    </div>
+
+                    <!-- SCHEDULED CALL INDICATOR -->
+                    <div class="scheduled-indicator hidden" id="scheduledIndicator">
+                        <span class="schedule-icon">⏰</span>
+                        <span class="schedule-text">Call in <span id="scheduledCountdown">--:--</span></span>
+                        <button class="cancel-schedule-btn" id="cancelScheduleBtn">✕</button>
                     </div>
 
                     <div class="mic-indicator" id="micIndicator">
@@ -180,6 +197,20 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- CALL HISTORY CARD -->
+                <div class="card call-history-card">
+                    <div class="card-header">
+                        <span class="card-icon">📱</span>
+                        <span class="card-title">Call History</span>
+                    </div>
+                    <div class="call-history-list" id="callHistoryList">
+                        <div class="call-history-empty">
+                            <span class="empty-icon">📞</span>
+                            <span class="empty-text">No calls yet. Start a conversation!</span>
+                        </div>
+                    </div>
+                </div>
                 
                 <!-- DEBUG PANEL -->
                 <div class="card debug-card" id="debugCard">
@@ -203,6 +234,48 @@
             <div class="status-dot"></div>
             <span class="status-text">Disconnected</span>
         </footer>
+    </div>
+
+    <!-- SCHEDULE CALL MODAL -->
+    <div class="modal-overlay hidden" id="scheduleModal">
+        <div class="modal-content schedule-modal">
+            <div class="modal-header">
+                <span class="modal-icon">⏰</span>
+                <h2 class="modal-title">Schedule a Call</h2>
+                <button class="modal-close" id="closeScheduleModal">✕</button>
+            </div>
+            
+            <p class="modal-subtitle">Set when you want Synki to call you 💕</p>
+            
+            <!-- QUICK OPTIONS -->
+            <div class="quick-options">
+                <button class="quick-btn" data-minutes="5">5 min</button>
+                <button class="quick-btn" data-minutes="10">10 min</button>
+                <button class="quick-btn" data-minutes="15">15 min</button>
+                <button class="quick-btn" data-minutes="30">30 min</button>
+                <button class="quick-btn" data-minutes="60">1 hour</button>
+            </div>
+            
+            <div class="divider">
+                <span>or set custom time</span>
+            </div>
+            
+            <!-- CUSTOM TIME INPUT -->
+            <div class="custom-time-container">
+                <div class="time-input-group">
+                    <label>Minutes</label>
+                    <input type="number" id="customMinutes" min="1" max="180" value="10" class="time-input">
+                </div>
+            </div>
+            
+            <!-- CONFIRM BUTTON -->
+            <button class="btn btn-primary btn-lg schedule-confirm-btn" id="confirmScheduleBtn">
+                <span class="btn-icon">📞</span>
+                <span class="btn-text">Schedule Call</span>
+            </button>
+            
+            <p class="modal-hint">You'll receive a call notification when the timer ends!</p>
+        </div>
     </div>
 
     <!-- SCRIPTS -->

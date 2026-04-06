@@ -119,5 +119,64 @@ const API = {
             method: 'POST',
             body: JSON.stringify({ role, content, emotion })
         });
+    },
+
+    /**
+     * Get call/session history
+     */
+    async getCallHistory(userId, limit = 20) {
+        return this.request(`/sessions/${userId}?limit=${limit}`);
+    },
+
+    /**
+     * Get user stats
+     */
+    async getUserStats(userId) {
+        return this.request(`/stats/${userId}`);
+    },
+
+    // ==================== SCHEDULED CALLS ====================
+
+    /**
+     * Schedule a call
+     */
+    async scheduleCall(userId, scheduledAt, message = null) {
+        return this.request(`/api/schedule/${userId}`, {
+            method: 'POST',
+            body: JSON.stringify({
+                scheduled_at: scheduledAt,
+                call_type: 'scheduled',
+                message: message || 'Scheduled call time! 💕'
+            })
+        });
+    },
+
+    /**
+     * Get user's scheduled calls
+     */
+    async getScheduledCalls(userId, status = null) {
+        let url = `/api/schedule/${userId}`;
+        if (status) {
+            url += `?status=${status}`;
+        }
+        return this.request(url);
+    },
+
+    /**
+     * Cancel a scheduled call
+     */
+    async cancelScheduledCall(userId, callId) {
+        return this.request(`/api/schedule/${userId}/${callId}`, {
+            method: 'DELETE'
+        });
+    },
+
+    /**
+     * Mark a call as answered
+     */
+    async markCallAnswered(callId) {
+        return this.request(`/api/schedule/${callId}/answered`, {
+            method: 'POST'
+        });
     }
 };

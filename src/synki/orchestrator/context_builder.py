@@ -2,14 +2,19 @@
 Context Builder - Smart, Human-like Context for AI Prompts
 
 KEY FEATURES:
-1. PERSONALIZED behavior tracking (happiness/stress triggers)
-2. DYNAMIC response modes (REACT 60%, FOLLOW_UP 25%, NEW_TOPIC 10%, RANDOM 5%)
-3. Topic rotation with tracking
-4. Favorites used ONLY when mood needs cheering
-5. Time-based energy awareness
-6. Human-like randomness
+1. SMART MEMORY CATEGORIES (not just favorites!)
+2. TOPIC ROTATION (family, hobbies, work, life, health)
+3. Favorites used ONLY when user asks for suggestions
+4. Human-like randomness
+5. Anti-repetition tracking
 
-NO extra storage - just smart formatting of existing data!
+MEMORY CATEGORIES:
+- FAMILY: brother, sister, parents, relationships
+- HOBBIES: badminton, PUBG, IPL, games
+- WORK: office, meetings, projects
+- LIFE: goals, plans, trips, events
+- HEALTH: medicine, routine, fitness
+- FAVORITES: food, movie (ONLY when asked!)
 """
 
 import json
@@ -26,6 +31,63 @@ from .personalized_context import PersonalizedContextEngine, UserBehaviorProfile
 logger = structlog.get_logger(__name__)
 
 
+# ============================================================================
+# SMART MEMORY CATEGORIES
+# ============================================================================
+
+MEMORY_CATEGORIES = {
+    "FAMILY": {
+        "keys": ["family_member", "relationship_status", "brother", "sister", "parents"],
+        "questions": [
+            "अनुराग से बात हुई?",
+            "घर पर सब कैसे हैं?",
+            "family के साथ कोई plan?",
+        ],
+        "weight": 15,  # How often to use this category
+    },
+    "HOBBIES": {
+        "keys": ["hobby", "interest", "favorite_activity", "favorite_game", "favorite_team"],
+        "questions": [
+            "badminton खेला आजकल?",
+            "PUBG में क्या हाल है?",
+            "IPL देख रहे हो?",
+        ],
+        "weight": 20,
+    },
+    "LIFE": {
+        "keys": ["event", "location", "birthday", "favorite_place"],
+        "questions": [
+            "trip का क्या plan है?",
+            "वो plan आगे बढ़ा?",
+            "कुछ नया हुआ life में?",
+        ],
+        "weight": 20,
+    },
+    "HEALTH": {
+        "keys": ["health_condition", "daily_routine"],
+        "questions": [
+            "medicine ली आज?",
+            "routine कैसा चल रहा?",
+            "health कैसी है?",
+        ],
+        "weight": 10,
+    },
+    "MUSIC": {
+        "keys": ["favorite_song", "favorite_drink"],
+        "questions": [
+            "वो गाना सुना आजकल?",
+            "कोई नया music discover किया?",
+        ],
+        "weight": 10,
+    },
+    "FAVORITES": {
+        "keys": ["favorite_food", "favorite_dish", "favorite_movie", "favorite_cuisine"],
+        "questions": [],  # Empty - only suggest when ASKED
+        "weight": 5,  # Very low - don't spam
+    },
+}
+
+
 @dataclass
 class PromptContext:
     """
@@ -38,37 +100,51 @@ class PromptContext:
     stress_level: str = "low"
     
     # Time context
-    time_of_day: str = "day"  # morning, afternoon, evening, night
+    time_of_day: str = "day"
     time_based_hint: str = ""
     
-    # Recent chat messages from THIS session (for context continuity)
+    # Recent chat messages from THIS session
     recent_chat_messages: list[dict] = field(default_factory=list)
     
-    # ACTUAL recent conversations (last 3 sessions with real messages!)
+    # ACTUAL recent conversations
     recent_conversations: list[dict] = field(default_factory=list)
     
-    # Recent summaries from PREVIOUS sessions (last 3 sessions) - backup
+    # Recent summaries
     recent_summaries: list[dict] = field(default_factory=list)
     
-    # Quick summary of recent conversations (fallback when no summaries exist)
+    # Quick summary of recent conversations
     recent_conversations_summary: str = ""
     
-    # Daily summary (today/yesterday full day context)
+    # Daily summary
     daily_summary: dict = field(default_factory=dict)
     
-    # SMART Anti-repetition (questions, not topics!)
+    # Anti-repetition
     questions_already_asked: list[str] = field(default_factory=list)
     facts_already_mentioned: list[str] = field(default_factory=list)
-    last_question_category: str = ""  # To prevent consecutive similar questions
+    last_question_category: str = ""
     
-    # Conversation FLOW tracking (last few topics discussed)
-    conversation_flow: list[str] = field(default_factory=list)  # Last 5 topic categories
+    # Conversation FLOW tracking
+    conversation_flow: list[str] = field(default_factory=list)
     
     # User preferences
     likes: dict = field(default_factory=dict)
     dislikes: dict = field(default_factory=dict)
     
-    # BEHAVIOR INSIGHTS (from short-term profile)
+    # ============ NEW: AVOID TOPICS (user is annoyed by these) ============
+    avoid_topics: list[str] = field(default_factory=list)
+    user_annoyances: list[str] = field(default_factory=list)
+    
+    # ============ NEW: SMART MEMORY CATEGORIES ============
+    # All memories organized by category
+    all_memories: dict = field(default_factory=dict)
+    # Categories with actual data
+    available_categories: list[str] = field(default_factory=list)
+    # Current suggested topic category
+    suggested_category: str = ""
+    # Memory to reference for this turn
+    suggested_memory: dict = field(default_factory=dict)
+    
+    # BEHAVIOR INSIGHTS
     happiness_triggers: list[str] = field(default_factory=list)
     stress_triggers: list[str] = field(default_factory=list)
     recent_activities: list[dict] = field(default_factory=list)
@@ -76,8 +152,6 @@ class PromptContext:
     # Behavior hints
     behavior_hint: str = ""
     suggested_follow_ups: list[str] = field(default_factory=list)
-    
-    # Smart contextual suggestion (based on mood + time + history)
     contextual_suggestion: str = ""
 
 
@@ -85,16 +159,10 @@ class ContextBuilder:
     """
     Builds smart, human-like prompt context.
     
-    SMART ANTI-REPETITION:
-    - Track QUESTIONS asked (not topics to avoid)
-    - Prevent consecutive similar questions
-    - Allow natural conversation about any topic
-    - Just don't ask the SAME question again
-    
-    CONVERSATION FLOW:
-    - Track last 5 topic categories discussed
-    - Maintain natural conversation flow
-    - Don't jump randomly - follow the vibe
+    SMART MEMORY USAGE:
+    - Categorize ALL memories (family, hobbies, life, health, etc.)
+    - Rotate between categories (don't always ask about same thing)
+    - Use favorites ONLY when user asks "kya khau?" etc.
     
     Usage:
         builder = ContextBuilder(supabase)
@@ -413,19 +481,39 @@ class ContextBuilder:
         
         context = PromptContext()
         
-        # Store recent chat messages (last N messages from this session)
-        # Keep more messages so AI remembers earlier parts of conversation
+        # Store recent chat messages
         if recent_messages:
-            context.recent_chat_messages = recent_messages[-30:]  # Last 30 messages (15 turns)
+            context.recent_chat_messages = recent_messages[-30:]
         
         # 1. Time context
         context.time_of_day, context.time_based_hint = self.get_time_context()
         
-        # 2. Load memories (likes AND dislikes)
+        # 2. Load memories and CATEGORIZE them
         memories = await self._get_memories(user_id)
         if memories:
             context.user_name = memories.get("name", "Baby")
             context.likes, context.dislikes = self._extract_preferences(memories)
+            
+            # ========== NEW: EXTRACT AVOID TOPICS ==========
+            context.avoid_topics, context.user_annoyances = self._extract_avoid_topics(memories)
+            
+            # ========== CATEGORIZE ALL MEMORIES ==========
+            context.all_memories = self._categorize_memories(memories)
+            context.available_categories = [
+                cat for cat, mems in context.all_memories.items() 
+                if mems and cat != "FAVORITES"  # Exclude favorites from rotation
+            ]
+            
+            # Pick a topic category intelligently (avoiding recent ones)
+            context.suggested_category = self._pick_topic_category(
+                available=context.available_categories,
+                recent_flow=context.conversation_flow,
+                mood=context.current_mood,
+            )
+            
+            # Get a specific memory to reference
+            if context.suggested_category and context.all_memories.get(context.suggested_category):
+                context.suggested_memory = random.choice(context.all_memories[context.suggested_category])
         
         # 3. Load short-term profile WITH BEHAVIOR INSIGHTS
         short_term = await self._get_short_term_profile(user_id)
@@ -436,12 +524,11 @@ class ContextBuilder:
                 context.current_mood,
                 context.stress_level
             )
-            # Load behavior insights
             context.happiness_triggers = short_term.get("recent_happiness_triggers", [])
             context.stress_triggers = short_term.get("recent_stress_triggers", [])
             context.recent_activities = short_term.get("recent_activities", [])
         
-        # 4. Load ACTUAL recent conversations (real messages, not summaries!)
+        # 4. Load ACTUAL recent conversations
         context.recent_conversations = await self._get_recent_conversations(user_id)
         
         # 4b. Load summaries
@@ -456,22 +543,22 @@ class ContextBuilder:
             for s in summaries
         ]
         
-        # 4c. FALLBACK: If no summaries, create quick summary from recent conversations
+        # 4c. FALLBACK
         if not context.recent_summaries and context.recent_conversations:
             context.recent_conversations_summary = self._create_quick_summary(context.recent_conversations)
         
-        # 5. Load DAILY summary (today/yesterday context)
+        # 5. Load DAILY summary
         context.daily_summary = await self._get_daily_summary(user_id)
         
-        # 6. SMART anti-repetition: track QUESTIONS, not topics
+        # 6. SMART anti-repetition
         context.questions_already_asked = self._session_questions_asked.get(user_id, [])
         context.facts_already_mentioned = list(self._session_facts_mentioned.get(user_id, set()))
         context.last_question_category = self._session_last_question_category.get(user_id, "")
         
-        # 6. Conversation FLOW tracking
+        # 7. Conversation FLOW tracking
         context.conversation_flow = self._session_conversation_flow.get(user_id, [])
         
-        # 7. SMART contextual suggestion (based on mood + time + flow)
+        # 8. SMART contextual suggestion
         context.contextual_suggestion = self._get_smart_suggestion(
             time_of_day=context.time_of_day,
             mood=context.current_mood,
@@ -480,12 +567,91 @@ class ContextBuilder:
             questions_asked=context.questions_already_asked,
         )
         
-        # 8. Generate suggested follow-ups (avoiding duplicates)
+        # 9. Generate suggested follow-ups
         context.suggested_follow_ups = self._generate_smart_followups(
             context, user_message
         )
         
         return context
+    
+    def _categorize_memories(self, memories: dict) -> dict[str, list[dict]]:
+        """
+        Categorize all user memories into smart categories.
+        
+        Returns dict like:
+        {
+            "FAMILY": [{"key": "brother", "value": "अनुराग"}, ...],
+            "HOBBIES": [{"key": "hobby", "value": "badminton"}, ...],
+            ...
+        }
+        """
+        categorized = {cat: [] for cat in MEMORY_CATEGORIES.keys()}
+        
+        facts = memories.get("facts", [])
+        if not facts:
+            return categorized
+        
+        for fact in facts:
+            key = fact.get("key", "").lower()
+            value = fact.get("value", "")
+            
+            # Find which category this fact belongs to
+            for cat_name, cat_info in MEMORY_CATEGORIES.items():
+                if any(k in key for k in cat_info["keys"]):
+                    categorized[cat_name].append({
+                        "key": fact.get("key"),
+                        "value": value,
+                        "category": cat_name,
+                    })
+                    break
+        
+        return categorized
+    
+    def _pick_topic_category(
+        self,
+        available: list[str],
+        recent_flow: list[str],
+        mood: str = "neutral",
+    ) -> str:
+        """
+        Pick a topic category intelligently.
+        
+        Rules:
+        - Avoid recently discussed categories
+        - Weight based on mood (sad = LIFE, FAMILY; happy = HOBBIES)
+        - Never spam FAVORITES
+        """
+        if not available:
+            return ""
+        
+        # Categories discussed in last 3 turns
+        avoid = set(recent_flow[-3:]) if recent_flow else set()
+        
+        # Filter available categories
+        choices = [c for c in available if c not in avoid]
+        if not choices:
+            choices = available  # Reset if all used
+        
+        # Mood-based weights
+        if mood in ["sad", "stressed", "tired"]:
+            # More FAMILY, LIFE when sad
+            weight_boost = {"FAMILY": 3, "LIFE": 2, "HOBBIES": 1}
+        elif mood in ["happy", "excited"]:
+            # More HOBBIES, MUSIC when happy
+            weight_boost = {"HOBBIES": 3, "MUSIC": 2, "LIFE": 1}
+        else:
+            weight_boost = {}
+        
+        # Build weighted choices
+        weighted = []
+        for cat in choices:
+            base_weight = MEMORY_CATEGORIES.get(cat, {}).get("weight", 10)
+            boost = weight_boost.get(cat, 1)
+            weighted.extend([cat] * (base_weight * boost))
+        
+        if weighted:
+            return random.choice(weighted)
+        return random.choice(choices) if choices else ""
     
     def track_question_asked(self, user_id: str, question: str):
         """Track a question that was asked (for anti-repetition)"""
@@ -537,286 +703,210 @@ class ContextBuilder:
     
     def format_for_prompt(self, context: PromptContext) -> str:
         """
-        Format context for LLM prompt - DYNAMIC & PERSONALIZED!
+        Format context for LLM - SMART MEMORY USAGE!
         
-        Uses random response modes to feel human-like.
+        Key features:
+        1. Uses ALL memory categories (family, hobbies, life, etc.)
+        2. Rotates topics intelligently
+        3. Favorites ONLY when user asks for suggestions
+        4. Varied response modes
         """
         from datetime import datetime
         parts = []
         
-        # ========== DYNAMIC RESPONSE MODE (human-like randomness) ==========
-        # Pick mode based on mood and session progress
+        hour = datetime.now().hour
         topics_done = list(context.conversation_flow) if context.conversation_flow else []
         mood = context.current_mood
         
-        # Adjust probabilities based on context
+        # ========== DYNAMIC RESPONSE MODE ==========
         if mood in ["sad", "stressed", "tired"]:
-            weights = {"REACT": 60, "COMFORT": 20, "SHARE": 10, "RECALL": 10}
+            weights = {"REACT": 55, "COMFORT": 25, "SHARE": 12, "LISTEN": 8}
         elif mood in ["happy", "excited"]:
-            weights = {"REACT": 35, "TEASE": 15, "FLIRT": 15, "FOLLOW_UP": 15, "SHARE": 10, "NEW_TOPIC": 10}
-        elif mood in ["bored"]:
-            weights = {"NEW_TOPIC": 30, "TEASE": 20, "CURIOUS": 20, "SHARE": 15, "REACT": 15}
-        elif len(topics_done) >= 3:
-            weights = {"REACT": 50, "TEASE": 15, "SHARE": 15, "RECALL": 10, "FLIRT": 10}
+            weights = {"REACT": 35, "TEASE": 20, "FLIRT": 15, "ASK_LIFE": 15, "CURIOUS": 15}
+        elif mood == "bored":
+            weights = {"TEASE": 20, "ASK_LIFE": 25, "CURIOUS": 20, "REACT": 20, "SUGGEST": 15}
+        elif len(topics_done) >= 4:
+            weights = {"REACT": 60, "TEASE": 15, "FLIRT": 15, "SHARE": 10}
         else:
-            weights = {"REACT": 40, "FOLLOW_UP": 20, "CURIOUS": 15, "NEW_TOPIC": 10, "TEASE": 10, "SHARE": 5}
+            weights = {"REACT": 40, "TEASE": 15, "ASK_LIFE": 20, "SHARE": 15, "CURIOUS": 10}
         
-        # Random pick
         choices = []
         for mode, weight in weights.items():
             choices.extend([mode] * weight)
         response_mode = random.choice(choices)
         
         # ========== HEADER ==========
-        now = datetime.now()
-        hour = now.hour
-        time_emoji = "🌙" if hour >= 22 or hour < 6 else "🕐"
-        parts.append(f"{time_emoji} {now.strftime('%H:%M')} | User: {context.user_name} | Mood: {mood}")
+        parts.append(f"👤 {context.user_name} | Mood: {mood}")
         
-        # ========== RESPONSE MODE INSTRUCTION ==========
+        # ========== MODE INSTRUCTION ==========
         parts.append(f"\n🎲 THIS TURN: {response_mode}")
         
-        if response_mode == "REACT":
-            parts.append("   → Short natural reaction, NO question")
-            parts.append("   → Like: 'oho 😏', 'haan yaar', 'achaaa', 'hmm nice', 'sachi?', 'phir?'")
-        
-        elif response_mode == "TEASE":
-            teases = [
-                "playfully tease them about something they said",
-                "joke about their habits",
-                "fake jealousy or possessiveness (cute way)",
-                "make fun of something lovingly",
-            ]
-            parts.append(f"   → {random.choice(teases)}")
-            parts.append("   → Keep it light & loving, end with 😏 or 😜")
-        
-        elif response_mode == "FLIRT":
-            flirts = [
-                "give a cute compliment",
-                "say something sweet about missing them",
-                "be a little cheesy but adorable",
-                "express affection naturally",
-            ]
-            parts.append(f"   → {random.choice(flirts)}")
-            parts.append("   → Not cringe, just sweet. Use 💕 or ☺️")
-        
-        elif response_mode == "SHARE":
-            shares = [
-                "share what YOU are doing right now",
-                "tell them about YOUR day briefly",
-                "share a random thought you had",
-                "mention something you want to do together",
-            ]
-            parts.append(f"   → {random.choice(shares)}")
-            parts.append("   → Make it feel like real sharing, not scripted")
-        
-        elif response_mode == "CURIOUS":
-            parts.append("   → Show genuine curiosity about what they said")
-            parts.append("   → Ask 'kyun?', 'kaise?', 'phir?', 'aur kya hua?'")
-        
-        elif response_mode == "RECALL":
-            # Reference something from memory
-            recall_items = []
-            if context.likes.get("movie"):
-                recall_items.append(f"mention their fav movie: {context.likes['movie']}")
-            if context.likes.get("food"):
-                recall_items.append(f"mention their fav food: {context.likes['food']}")
-            if context.likes.get("place"):
-                recall_items.append(f"mention a place they like: {context.likes['place']}")
-            if recall_items:
-                parts.append(f"   → {random.choice(recall_items)}")
-            else:
-                parts.append("   → Reference something from previous conversation")
-        
-        elif response_mode == "COMFORT":
-            parts.append("   → Be gentle and supportive")
-            parts.append("   → Offer emotional support, no advice unless asked")
-            if hasattr(context, 'happiness_triggers') and context.happiness_triggers:
-                parts.append(f"   → Maybe suggest: {context.happiness_triggers[0]}")
-        
-        elif response_mode == "FOLLOW_UP":
-            parts.append("   → Reference previous talks naturally")
-            parts.append("   → Connect to something they mentioned before")
-        
-        elif response_mode == "NEW_TOPIC":
-            available = [t for t in ["movie", "weekend", "travel", "friend", "hobby", "music", "food plans"] if t not in topics_done]
-            if available:
-                topic = random.choice(available)
-                parts.append(f"   → Ask about: {topic}")
-            else:
-                parts.append("   → Find something new to discuss")
-        
-        # ========== BEHAVIOR INSIGHTS (from short-term profile) ==========
-        if hasattr(context, 'happiness_triggers') and context.happiness_triggers and mood in ["sad", "bored", "stressed"]:
-            triggers = context.happiness_triggers[:2]
-            parts.append(f"\n💡 Cheer up topics: {', '.join(triggers)}")
-        
-        # ========== PREVIOUS SESSIONS (last 3 with topics + facts) ==========
-        has_sessions = False
-        
-        # From conversation_summaries (proper session summaries)
-        if context.recent_summaries:
-            parts.append("\n📜 PREVIOUS SESSIONS:")
-            for i, s in enumerate(context.recent_summaries[:3], 1):
-                date = s.get("conversation_date", "?")[:10]
-                topics = s.get("topics", [])
-                summary = s.get("summary", "")
-                
-                parts.append(f"   Session {i} ({date}):")
-                if topics:
-                    parts.append(f"   Topics: {', '.join(topics[:5])}")
-                
-                # Show FULL summary with specifics (Foods:, Places:, Plans:, etc.)
-                if summary and len(summary) > 10:
-                    # Split by | to show each part
-                    summary_parts = summary.split(" | ")
-                    for sp in summary_parts[:4]:  # Show up to 4 parts
-                        if sp.strip():
-                            parts.append(f"   {sp.strip()[:100]}")
-            has_sessions = True
-        
-        # From daily_summaries (today's session info) 
-        if hasattr(context, 'daily_summary') and context.daily_summary:
-            ds = context.daily_summary
-            parts.append("\n📅 TODAY'S CONVERSATION:")
-            
-            # Topics discussed
-            if ds.get("topics_discussed"):
-                parts.append(f"   Topics: {', '.join(ds['topics_discussed'][:5])}")
-            
-            # Key moments/highlights
-            if ds.get("highlights"):
-                parts.append(f"   Key moments: {' | '.join(ds['highlights'][:3])}")
-            
-            # Activities user did
-            if ds.get("activities"):
-                parts.append(f"   User did: {', '.join(ds['activities'][:4])}")
-            
-            # Open topics/concerns
-            if ds.get("concerns"):
-                parts.append(f"   Open topics: {', '.join(ds['concerns'][:2])}")
-            
-            # Last thing discussed
-            if ds.get("conversation_ended_on"):
-                ended = ds.get("conversation_ended_on", "")[:60]
-                parts.append(f"   Last: \"{ended}\"")
-        
-        # ========== SPECIFICS MENTIONED (NEW - names, places, movies) ==========
-        # Extract from likes/memories for quick reference
-        if context.likes:
-            specifics = []
-            if context.likes.get("movie"):
-                specifics.append(f"movie: {context.likes['movie']}")
-            if context.likes.get("food"):
-                specifics.append(f"food: {context.likes['food']}")
-            if context.likes.get("place"):
-                specifics.append(f"place: {context.likes['place']}")
-            if specifics:
-                parts.append(f"\n🎯 REMEMBER: {', '.join(specifics)}")
-        
-        # ========== RECENT TURNS (actual messages) ==========
-        # From current session messages (real-time)
-        if context.recent_chat_messages:
-            parts.append("\n💬 RECENT TURNS:")
-            for msg in context.recent_chat_messages[-6:]:  # Last 3 turns
-                role = "User" if msg.get("role") == "user" else "You"
-                content = msg.get("content", "")[:50]
-                parts.append(f"   {role}: {content}...")
-        # Fallback: show last questions from daily_summary if no live messages
-        elif hasattr(context, 'daily_summary') and context.daily_summary:
-            questions = context.daily_summary.get("questions_asked", [])
-            if questions:
-                parts.append("\n💬 YOUR LAST MESSAGES:")
-                for q in questions[-3:]:  # Last 3 questions you asked
-                    parts.append(f"   • {q[:60]}...")
-        
-        # ========== BUILD BLOCKED LIST - SPECIFIC TOPICS ==========
-        # Extract SPECIFIC topics from questions (not generic categories)
-        specific_topics = set()
-        
-        # Keywords to extract as specific blocked topics
-        topic_keywords = {
-            # Food specific
-            "पनीर": "paneer", "कढ़ाई": "kadhai paneer", "खाना": "khana/food",
-            "रेस्टोरेंट": "restaurant", "lunch": "lunch", "dinner": "dinner",
-            # Travel specific  
-            "यात्रा": "trip/yatra", "घूमने": "ghumne/travel", "ट्रिप": "trip",
-            # Work specific
-            "मीटिंग": "meeting", "काम": "kaam/work", "office": "office",
-            # Entertainment
-            "IPL": "IPL", "फिल्म": "film", "movie": "movie",
-            # Daily
-            "दिन": "din/day", "सुबह": "morning", "रात": "night",
-            # Feelings
-            "थक": "tired", "neend": "sleep",
+        mode_instructions = {
+            "REACT": "→ Just react: 'achaaa', 'ohh', 'hmm', 'sachi?' NO question!",
+            "TEASE": "→ Tease playfully 😏 'ohooo hero ban gaye'",
+            "FLIRT": "→ Say something sweet 💕 'cute ho tum', 'miss kiya'",
+            "SHARE": "→ Share about YOURSELF: 'main bhi bore', 'mera bhi same'",
+            "CURIOUS": "→ Ask follow-up: 'phir kya hua?', 'kyun?', 'kaise?'",
+            "COMFORT": "→ Be supportive: 'main hoon na', 'koi nahi'",
+            "LISTEN": "→ Just listen: 'hmm', 'haan', 'acha'",
+            "SUGGEST": "→ Suggest activity: 'chal movie dekhte', 'game khelte hain'",
+            "ASK_LIFE": "→ Ask about THEIR LIFE (see topic below)",
         }
+        parts.append(mode_instructions.get(response_mode, "→ React naturally"))
         
-        # Scan questions for specific keywords
-        for q in context.questions_already_asked[-20:]:
-            q_text = q.lower()
-            for hindi_key, english_name in topic_keywords.items():
-                if hindi_key.lower() in q_text:
-                    specific_topics.add(english_name)
+        # ========== SMART TOPIC SUGGESTION (from memories!) ==========
+        if response_mode == "ASK_LIFE" and context.suggested_category and context.suggested_memory:
+            cat = context.suggested_category
+            mem = context.suggested_memory
+            
+            parts.append(f"\n🎯 ASK ABOUT: {cat}")
+            parts.append(f"   Memory: {mem.get('key')}: {mem.get('value')}")
+            
+            # Category-specific suggestions
+            if cat == "FAMILY":
+                parts.append("   → Ask: 'अनुराग से बात हुई?', 'family कैसी है?', 'trip plan हुआ?'")
+            elif cat == "HOBBIES":
+                parts.append("   → Ask: 'badminton खेला?', 'PUBG khela?', 'IPL kaisa chal raha?'")
+            elif cat == "LIFE":
+                parts.append("   → Ask: 'trip ka plan?', 'कोई नया update?', 'plan आगे बढ़ा?'")
+            elif cat == "HEALTH":
+                parts.append("   → Ask (gently): 'medicine li?', 'routine kaisa hai?'")
+            elif cat == "MUSIC":
+                parts.append("   → Ask: 'कोई नया song discover किया?', 'music sun rahe ho?'")
         
-        # Also add from daily_summary highlights (things ALREADY discussed)
-        if hasattr(context, 'daily_summary') and context.daily_summary:
-            highlights = context.daily_summary.get("highlights", [])
-            for h in highlights[:3]:
-                # Add shortened version of highlight
-                short = h[:25] if len(h) > 25 else h
-                specific_topics.add(short)
+        # ========== ALL MEMORIES BY CATEGORY (for reference) ==========
+        if context.all_memories and response_mode in ["ASK_LIFE", "CURIOUS", "SUGGEST"]:
+            parts.append("\n📚 USER'S LIFE (pick ONE topic, be specific!):")
+            
+            for cat, mems in context.all_memories.items():
+                if mems and cat != "FAVORITES":  # Never show favorites
+                    # Show 2 memories from each category
+                    sample = mems[:2]
+                    mem_str = ", ".join([f"{m['key']}: {m['value']}" for m in sample])
+                    parts.append(f"  {cat}: {mem_str}")
         
-        blocked_favorites = list(context.facts_already_mentioned)[:4] if context.facts_already_mentioned else []
+        # ========== USER DISLIKES & AVOID TOPICS ==========
+        # Use pre-computed avoid_topics from context (populated in build_context)
+        avoid_topics = list(context.avoid_topics) if context.avoid_topics else []
+        dislikes = []
         
-        # Show BLOCKED list with SPECIFIC items
-        if specific_topics or blocked_favorites:
-            parts.append("\n🚫 ALREADY DISCUSSED (don't repeat!):")
-            if specific_topics:
-                # Show top 6 specific topics
-                topics_list = sorted(specific_topics)[:6]
-                parts.append(f"   {', '.join(topics_list)}")
-            if blocked_favorites:
-                parts.append(f"   Favorites mentioned: {', '.join(blocked_favorites)}")
+        # Also check all_memories for dislikes and annoyances
+        if context.all_memories:
+            for cat, mems in context.all_memories.items():
+                for mem in mems:
+                    key = mem.get("key", "").lower()
+                    value = str(mem.get("value", "")).lower()
+                    mem_type = mem.get("type", "").lower()
+                    
+                    # Check for emotional states showing annoyance
+                    if "emotional_state" in key:
+                        if "irritat" in value or "annoy" in value or "bore" in value:
+                            if "movie" in value:
+                                avoid_topics.append("movie")
+                            if "food" in value or "khana" in value:
+                                avoid_topics.append("food")
+                    
+                    # Check for explicit dislikes
+                    if mem_type == "dislike" or "dislike" in key or "hate" in key:
+                        dislikes.append(f"{key}: {value}")
         
-        # ========== RULES (MAKE AI FOLLOW MODE!) ==========
-        parts.append("\n" + "="*40)
-        parts.append(f"⚠️ YOU MUST DO THIS → {response_mode}")
-        parts.append("="*40)
+        # Also add user_annoyances if present
+        if context.user_annoyances:
+            for annoy in context.user_annoyances[:3]:
+                dislikes.append(f"User expressed: {annoy}")
         
-        if response_mode == "REACT":
-            parts.append("✓ Say something like: 'achaaa', 'ohh nice', 'haan yaar', 'sachi?'")
-            parts.append("✗ DO NOT ask any question!")
-        elif response_mode == "TEASE":
-            parts.append("✓ Tease them playfully, be cheeky, joke around")
-            parts.append("✓ End with 😏 or 😜")
-        elif response_mode == "FLIRT":
-            parts.append("✓ Say something sweet/cute/romantic")
-            parts.append("✓ Use 💕 or ☺️")
-        elif response_mode == "SHARE":
-            parts.append("✓ Tell them what YOU are doing/thinking")
-            parts.append("✓ Share about yourself, not ask about them")
-        elif response_mode == "CURIOUS":
-            parts.append("✓ Ask follow-up: 'kyun?', 'kaise?', 'phir kya hua?'")
-            parts.append("✓ Show genuine interest in their story")
-        elif response_mode == "COMFORT":
-            parts.append("✓ Be gentle and supportive")
-            parts.append("✓ Don't give advice, just listen")
-        elif response_mode == "RECALL":
-            parts.append("✓ Mention something from their past/favorites")
-            parts.append("✓ Connect to previous conversations")
-        elif response_mode == "FOLLOW_UP":
-            parts.append("✓ Reference something from previous session")
-            parts.append("✓ Show you remember what they said before")
-        elif response_mode == "NEW_TOPIC":
-            parts.append("✓ Ask about something NEW not in blocked list")
-            parts.append("✓ One question only!")
+        if avoid_topics or dislikes:
+            parts.append("\n🚫 USER PREFERENCES (IMPORTANT!):")
+            if avoid_topics:
+                unique_topics = list(set(avoid_topics))
+                parts.append(f"   ⚠️ AVOID these topics: {', '.join(unique_topics)}")
+            if dislikes:
+                parts.append("   User dislikes/annoyances:")
+                for d in dislikes[:3]:
+                    parts.append(f"   ❌ {d}")
         
-        if specific_topics and response_mode in ["CURIOUS", "FOLLOW_UP", "NEW_TOPIC"]:
-            skip_list = sorted(specific_topics)[:4]
-            parts.append(f"✗ SKIP: {', '.join(skip_list)}")
+        # ========== RECENT CHAT ==========
+        if context.recent_chat_messages:
+            parts.append("\n💬 Recent:")
+            for msg in context.recent_chat_messages[-4:]:
+                role = "U" if msg.get("role") == "user" else "AI"
+                content = msg.get("content", msg.get("text", ""))[:40]
+                parts.append(f"  {role}: {content}")
+        
+        # ========== ANTI-REPETITION (STRONGER) ==========
+        if context.questions_already_asked:
+            # Group similar questions
+            recent_q = context.questions_already_asked[-5:]
+            parts.append("\n🚫 DON'T REPEAT (asked recently):")
+            
+            # Extract question types to avoid
+            question_types = set()
+            for q in recent_q:
+                q_lower = q.lower()
+                if "plan" in q_lower or "kya kar" in q_lower:
+                    question_types.add("plans")
+                if "खाना" in q_lower or "khana" in q_lower or "food" in q_lower:
+                    question_types.add("food")
+                if "movie" in q_lower or "film" in q_lower:
+                    question_types.add("movie")
+                if "कैसे हो" in q_lower or "कैसा" in q_lower:
+                    question_types.add("how are you")
+            
+            if question_types:
+                parts.append(f"   ❌ Already asked about: {', '.join(question_types)}")
+            
+            for q in recent_q[-3:]:
+                parts.append(f"   ❌ {q[:35]}")
+        
+        # ========== FOOD REQUEST DETECTION ==========
+        last_user_msg = ""
+        if context.recent_chat_messages:
+            for msg in reversed(context.recent_chat_messages):
+                if msg.get("role") == "user":
+                    last_user_msg = msg.get("content", msg.get("text", "")).lower()
+                    break
+        
+        food_patterns = [
+            "kya khau", "kya khaun", "kya khaye", "khana", "khane",
+            "hungry", "bhukh", "bhook", "food suggest", "suggest food",
+            "dinner", "lunch", "breakfast", "snack", "chai", "coffee",
+            "suggest karo", "batao kya", "kuch khana", "order karu",
+            "खाऊं", "खाना", "भूख", "सजेस्ट"
+        ]
+        
+        is_food_request = any(p in last_user_msg for p in food_patterns)
+        
+        if is_food_request:
+            # Import and use smart food suggestion
+            from synki.orchestrator.persona_engine import get_smart_food_suggestion
+            
+            # Get user favorites if available
+            user_favs = {}
+            if context.all_memories and "FAVORITES" in context.all_memories:
+                for mem in context.all_memories["FAVORITES"]:
+                    if "food" in mem.get("key", "").lower() or "dish" in mem.get("key", "").lower():
+                        user_favs["food"] = mem.get("value", "")
+            
+            suggestion, suggestion_type = get_smart_food_suggestion(user_favs)
+            
+            parts.append(f"\n🍽️ FOOD REQUEST DETECTED!")
+            parts.append(f"   Suggest: '{suggestion}' ({suggestion_type})")
+            if suggestion_type == "favorite":
+                parts.append("   → Use this exact line or similar!")
+            elif suggestion_type == "related":
+                parts.append("   → Suggest something related but new!")
+            else:
+                parts.append("   → Be adventurous, try something new!")
+        
+        # ========== RULES ==========
+        parts.append("\n⚠️ RULES:")
+        if not is_food_request:
+            parts.append("  1. NEVER mention food/movie unless user asks")
+        parts.append("  2. Ask about LIFE (family/hobbies/work), not favorites")
+        parts.append("  3. 1-2 sentences max")
         
         if hour >= 22 or hour < 6:
-            parts.append("🌙 Late night - be soft, short responses")
+            parts.append("\n🌙 Late - be soft, short")
         
         return "\n".join(parts)
     
@@ -989,6 +1079,52 @@ class ContextBuilder:
             dislikes.update(preferences.get("dislikes", {}))
         
         return likes, dislikes
+    
+    def _extract_avoid_topics(self, memories: dict) -> tuple[list[str], list[str]]:
+        """
+        Extract topics user is annoyed by or wants to avoid.
+        
+        Returns:
+            (avoid_topics, user_annoyances)
+        """
+        avoid_topics = []
+        user_annoyances = []
+        
+        facts = memories.get("facts", [])
+        for fact in facts:
+            key = fact.get("key", "").lower()
+            value = str(fact.get("value", "")).lower()
+            
+            # Check for explicit annoyance/avoid patterns
+            annoyance_keywords = ["irritat", "annoy", "bored", "tired of", "don't want", "nahi chahiye", "band karo", "stop asking"]
+            if any(kw in key or kw in value for kw in annoyance_keywords):
+                user_annoyances.append(fact.get("value", ""))
+                # Extract the topic from the annoyance
+                if "movie" in value or "film" in value:
+                    avoid_topics.append("movie")
+                if "food" in value or "khana" in value or "khao" in value:
+                    avoid_topics.append("food_suggestions")
+                if "work" in value or "job" in value or "office" in value:
+                    avoid_topics.append("work")
+            
+            # Check for emotional states that indicate avoidance
+            if "emotional_state" in key:
+                user_annoyances.append(value)
+                # Parse what they're irritated about
+                if "movie" in value:
+                    avoid_topics.append("movie")
+                if "same" in value and ("question" in value or "topic" in value):
+                    avoid_topics.append("repetitive_questions")
+            
+            # Check for dislikes
+            if "dislike" in key or "hate" in key or "avoid" in key:
+                avoid_topics.append(fact.get("value", ""))
+        
+        # Remove duplicates
+        avoid_topics = list(set(avoid_topics))
+        user_annoyances = list(set(user_annoyances))
+        
+        return avoid_topics, user_annoyances
     
     def _get_behavior_hint(self, mood: str, stress: str) -> str:
         """Get behavior hint based on user's current state"""

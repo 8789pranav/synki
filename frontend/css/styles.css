@@ -771,6 +771,420 @@ body {
     background: var(--text-muted);
 }
 
+/* ===== CALL BUTTON IN HEADER ===== */
+.btn-call-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.2rem;
+    background: linear-gradient(135deg, var(--success), var(--success-dark));
+    border: none;
+    border-radius: var(--radius-lg);
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+}
+
+.btn-call-header:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.5);
+}
+
+.btn-call-header .call-icon {
+    font-size: 1.1rem;
+    animation: ring 2s ease-in-out infinite;
+}
+
+.btn-call-header.in-call {
+    background: linear-gradient(135deg, var(--danger), var(--danger-dark));
+    box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
+}
+
+.btn-call-header.in-call:hover {
+    box-shadow: 0 6px 20px rgba(244, 67, 54, 0.5);
+}
+
+.btn-call-header.in-call .call-icon {
+    animation: none;
+}
+
+@keyframes ring {
+    0%, 100% { transform: rotate(0); }
+    10% { transform: rotate(15deg); }
+    20% { transform: rotate(-15deg); }
+    30% { transform: rotate(10deg); }
+    40% { transform: rotate(-10deg); }
+    50%, 100% { transform: rotate(0); }
+}
+
+/* ===== CALL HISTORY CARD ===== */
+.call-history-card {
+    max-height: 300px;
+}
+
+.call-history-list {
+    max-height: 230px;
+    overflow-y: auto;
+    padding: 0.5rem 0;
+}
+
+.call-history-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    color: var(--text-muted);
+}
+
+.call-history-empty .empty-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.5;
+}
+
+.call-history-empty .empty-text {
+    font-size: 0.9rem;
+}
+
+.call-history-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    transition: background var(--transition-fast);
+    cursor: pointer;
+}
+
+.call-history-item:hover {
+    background: var(--bg-card-hover);
+}
+
+.call-item-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    margin-right: 0.75rem;
+    flex-shrink: 0;
+}
+
+.call-item-icon.outgoing {
+    background: linear-gradient(135deg, var(--success), var(--success-dark));
+}
+
+.call-item-icon.missed {
+    background: linear-gradient(135deg, var(--danger), var(--danger-dark));
+}
+
+.call-item-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.call-item-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.call-item-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.call-item-duration {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-left: auto;
+    padding-left: 0.5rem;
+}
+
+.call-item-badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: rgba(255, 107, 157, 0.2);
+    color: var(--primary);
+}
+
+/* ===== SCHEDULE CALL BUTTON ===== */
+.btn-schedule {
+    background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: var(--radius-lg);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-schedule:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(124, 77, 255, 0.4);
+}
+
+.btn-schedule .btn-icon {
+    animation: wiggle 2s ease-in-out infinite;
+}
+
+@keyframes wiggle {
+    0%, 100% { transform: rotate(0); }
+    25% { transform: rotate(-10deg); }
+    75% { transform: rotate(10deg); }
+}
+
+/* ===== SCHEDULED INDICATOR ===== */
+.scheduled-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.25rem;
+    background: linear-gradient(135deg, rgba(124, 77, 255, 0.2), rgba(255, 107, 157, 0.2));
+    border: 1px solid rgba(124, 77, 255, 0.3);
+    border-radius: var(--radius-lg);
+    margin-top: 1rem;
+    animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 10px rgba(124, 77, 255, 0.2); }
+    50% { box-shadow: 0 0 20px rgba(124, 77, 255, 0.4); }
+}
+
+.scheduled-indicator .schedule-icon {
+    font-size: 1.5rem;
+    animation: wiggle 2s ease-in-out infinite;
+}
+
+.scheduled-indicator .schedule-text {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.scheduled-indicator #scheduledCountdown {
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.cancel-schedule-btn {
+    margin-left: auto;
+    background: rgba(244, 67, 54, 0.2);
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-full);
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all var(--transition-fast);
+}
+
+.cancel-schedule-btn:hover {
+    background: rgba(244, 67, 54, 0.4);
+}
+
+/* ===== SCHEDULE MODAL ===== */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-content {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-xl);
+    padding: 2rem;
+    max-width: 400px;
+    width: 90%;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-lg);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.modal-icon {
+    font-size: 1.8rem;
+}
+
+.modal-title {
+    font-size: 1.4rem;
+    font-weight: 600;
+    flex: 1;
+}
+
+.modal-close {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all var(--transition-fast);
+}
+
+.modal-close:hover {
+    background: rgba(244, 67, 54, 0.3);
+    color: var(--danger);
+}
+
+.modal-subtitle {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+}
+
+/* Quick options */
+.quick-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.quick-btn {
+    flex: 1;
+    min-width: 70px;
+    padding: 0.75rem 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.quick-btn:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--primary);
+}
+
+.quick-btn.selected {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    border-color: var(--primary);
+    color: white;
+}
+
+/* Divider */
+.divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1.5rem 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-color);
+}
+
+/* Custom time input */
+.custom-time-container {
+    margin-bottom: 1.5rem;
+}
+
+.time-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.time-input-group label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.time-input {
+    padding: 0.75rem 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 1.2rem;
+    font-weight: 600;
+    text-align: center;
+    width: 100%;
+}
+
+.time-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.2);
+}
+
+/* Schedule confirm button */
+.schedule-confirm-btn {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.modal-hint {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* Pulse highlight for connect button when call comes in */
+.pulse-highlight {
+    animation: pulseHighlight 0.5s ease-in-out infinite;
+}
+
+@keyframes pulseHighlight {
+    0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+    }
+    50% { 
+        transform: scale(1.05);
+        box-shadow: 0 8px 30px rgba(76, 175, 80, 0.6);
+    }
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 640px) {
     .auth-card {
@@ -796,5 +1210,38 @@ body {
     
     .avatar-emoji {
         font-size: 4rem;
+    }
+    
+    /* Schedule responsive */
+    .btn-schedule {
+        padding: 0.6rem 1rem;
+        font-size: 0.9rem;
+    }
+    
+    .btn-schedule .btn-text {
+        display: none;
+    }
+    
+    .scheduled-indicator {
+        flex-wrap: wrap;
+        padding: 0.5rem 1rem;
+    }
+    
+    .quick-options {
+        gap: 0.5rem;
+    }
+    
+    .quick-btn {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+    }
+    
+    .modal-content {
+        padding: 1.5rem;
+    }
+    
+    .connection-controls {
+        flex-wrap: wrap;
+        gap: 0.75rem;
     }
 }

@@ -163,6 +163,12 @@ class ProactiveScheduler:
         
         while True:
             try:
+                # Check scheduled calls first (these are time-sensitive)
+                scheduled = await self.check_scheduled_calls()
+                if scheduled:
+                    logger.info(f"Triggered {len(scheduled)} scheduled calls")
+                
+                # Then check proactive contacts
                 await self.check_all_users()
             except Exception as e:
                 logger.error(f"Scheduler error: {e}")
@@ -227,6 +233,68 @@ class ProactiveScheduler:
         logger.info(f"Message notification queued for {user_id[:8]}...")
         return True
 
+    async def check_scheduled_calls(self) -> list[dict]:
+        """
+        Check for scheduled calls that should be triggered now.
+        
+        Returns list of calls that were triggered.
+        """
+        if not self._supabase:
+            logger.warning("No Supabase client, cannot check scheduled calls")
+            return []
+        
+        triggered = []
+        
+        try:
+            # Get pending calls that should be triggered
+            result = self._supabase.rpc('get_pending_calls_to_trigger').execute()
+            
+            if not result.data:
+                return []
+            
+            logger.info(f"Found {len(result.data)} scheduled calls to trigger")
+            
+            for call in result.data:
+                call_id = call['id']
+                user_id = call['user_id']
+                message = call.get('message') or "Scheduled call time! 💕"
+                call_type = call.get('call_type', 'scheduled')
+                
+                # Update status to triggered
+                self._supabase.table('scheduled_calls').update({
+                    'status': 'triggered',
+                    'triggered_at': datetime.now().isoformat()
+                }).eq('id', call_id).execute()
+                
+                # Create pending proactive contact for the incoming call UI
+                try:
+                    self._supabase.table("proactive_pending").insert({
+                        "user_id": user_id,
+                        "contact_type": "call",
+                        "message": message,
+                        "context": {"scheduled_call_id": call_id, "call_type": call_type},
+                        "status": "pending",
+                        "created_at": datetime.now().isoformat(),
+                    }).execute()
+                    
+                    triggered.append({
+                        "call_id": call_id,
+                        "user_id": user_id,
+                        "message": message,
+                        "call_type": call_type,
+                    })
+                    
+                    logger.info(f"⏰ Triggered scheduled call {call_id[:8]}... for user {user_id[:8]}...")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to create pending contact for scheduled call: {e}")
+            
+            return triggered
+            
+        except Exception as e:
+            logger.error(f"Failed to check scheduled calls: {e}")
+            return []
+
 
 # ============================================================================
 # CLI Entry Point (for running as cron job)
@@ -254,6 +322,14 @@ async def run_scheduler_once():
     )
     
     scheduler = ProactiveScheduler(supabase)
+    
+    # Check scheduled calls first
+    scheduled = await scheduler.check_scheduled_calls()
+    print(f"⏰ Scheduled calls triggered: {len(scheduled)}")
+    for s in scheduled:
+        print(f"   - {s['call_type']}: {s['message'][:50]}...")
+    
+    # Then check proactive contacts
     contacts = await scheduler.check_all_users()
     
     print(f"✅ Proactive contacts triggered: {len(contacts)}")

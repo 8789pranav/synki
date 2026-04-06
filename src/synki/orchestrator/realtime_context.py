@@ -51,16 +51,111 @@ class ContextCache:
     def is_expired(self) -> bool:
         return (datetime.now() - self.cached_at).seconds > self.ttl_seconds
     
+    def get_avoid_topics(self) -> list[str]:
+        """Get topics user is annoyed by or wants to avoid"""
+        avoid = []
+        for fact in self.facts:
+            key = fact.get("key", "").lower()
+            value = str(fact.get("value", "")).lower()
+            fact_type = fact.get("type", "").lower()
+            
+            # Check for annoyance/irritation
+            if "irritated" in value or "annoyed" in value or "tired of" in value:
+                # Extract what they're annoyed by
+                if "movie" in value:
+                    avoid.append("movie")
+                if "food" in value or "khana" in value:
+                    avoid.append("food")
+                if "work" in value or "office" in value:
+                    avoid.append("work")
+            
+            # Check for explicit avoid_topic or dislike
+            if fact_type in ["avoid_topic", "dislike"]:
+                avoid.append(value)
+            
+            # Check emotional states that indicate avoidance
+            if key == "emotional_state" and ("irritat" in value or "annoy" in value or "bore" in value):
+                # Parse what topic
+                for topic in ["movie", "food", "work", "music", "health"]:
+                    if topic in value:
+                        avoid.append(topic)
+        
+        return list(set(avoid))
+    
+    def get_user_preferences(self) -> dict:
+        """Get structured user preferences"""
+        prefs = {
+            "likes": [],
+            "dislikes": [],
+            "avoid_topics": self.get_avoid_topics(),
+            "preferred_style": None,  # How they like to chat
+        }
+        
+        for fact in self.facts:
+            key = fact.get("key", "").lower()
+            value = fact.get("value", "")
+            fact_type = fact.get("type", "").lower()
+            
+            if fact_type == "preference" or "favorite" in key:
+                prefs["likes"].append({"topic": key, "value": value})
+            elif fact_type == "dislike" or "hate" in key or "dislike" in key:
+                prefs["dislikes"].append({"topic": key, "value": value})
+            elif fact_type == "conversation_style":
+                prefs["preferred_style"] = value
+        
+        return prefs
+    
     def get_relevant_facts(self, keywords: list[str], max_facts: int = 5) -> list[dict]:
-        """Get facts relevant to current conversation (fast, no LLM)"""
+        """Get facts relevant to current conversation (smart filtering)"""
+        avoid_topics = self.get_avoid_topics()
+        
         if not keywords:
-            # Return high-importance facts by default
-            return [f for f in self.facts if f.get("importance") in ["critical", "high"]][:max_facts]
+            # Return high-importance facts, but NOT related to avoided topics
+            facts = []
+            for f in self.facts:
+                if f.get("importance") not in ["critical", "high"]:
+                    continue
+                # Check if this fact is about an avoided topic
+                key = f.get("key", "").lower()
+                value = str(f.get("value", "")).lower()
+                
+                should_skip = False
+                for avoid in avoid_topics:
+                    if avoid.lower() in key or avoid.lower() in value:
+                        should_skip = True
+                        break
+                
+                if not should_skip:
+                    facts.append(f)
+            
+            return facts[:max_facts]
+        
+        # Check if user is asking about an avoided topic
+        for kw in keywords:
+            if kw.lower() in [a.lower() for a in avoid_topics]:
+                # User is annoyed by this topic - don't inject related facts
+                return []
         
         relevant = []
         for fact in self.facts:
             key = fact.get("key", "").lower()
             value = str(fact.get("value", "")).lower()
+            fact_type = fact.get("type", "").lower()
+            
+            # Skip dislikes and avoid_topic facts
+            if fact_type in ["dislike", "avoid_topic"]:
+                continue
+            
+            # Skip if it's about a topic user wants to avoid
+            is_avoided = False
+            for avoid in avoid_topics:
+                if avoid.lower() in key or avoid.lower() in value:
+                    is_avoided = True
+                    break
+            
+            if is_avoided:
+                continue
+            
             for kw in keywords:
                 if kw.lower() in key or kw.lower() in value:
                     relevant.append(fact)
@@ -199,7 +294,7 @@ class RealtimeContextManager:
         return hints
     
     def _build_context_injection(self, cache: ContextCache, user_text: str) -> str:
-        """Build context string to inject into prompt (fast)"""
+        """Build context string to inject into prompt (fast, SMART)"""
         logger.info("🔧 BUILDING CONTEXT INJECTION")
         logger.info(f"   Cache User: {cache.user_id}")
         logger.info(f"   Cache Name: {cache.name}")
@@ -212,11 +307,29 @@ class RealtimeContextManager:
             lines.append(f"User का नाम: {cache.name}")
             logger.info(f"   ✓ Added name: {cache.name}")
         
+        # Get topics to AVOID (user is annoyed by these)
+        avoid_topics = cache.get_avoid_topics()
+        if avoid_topics:
+            lines.append(f"⚠️ AVOID these topics (user is annoyed): {', '.join(avoid_topics)}")
+            logger.info(f"   🚫 Avoid Topics: {avoid_topics}")
+        
         # Extract keywords from user text for relevance
         keywords = self._extract_keywords(user_text)
         logger.info(f"   Extracted Keywords: {keywords}")
         
-        # Get relevant facts
+        # Check if user is talking about something they want to avoid
+        user_text_lower = user_text.lower()
+        is_complaining = any(word in user_text_lower for word in [
+            "नहीं", "मत", "बोर", "चुप", "stop", "enough", "irritat", "annoy"
+        ])
+        
+        if is_complaining:
+            lines.append("🛑 User seems annoyed - DON'T push topics, just react calmly")
+            logger.info("   ⚠️ User seems annoyed/complaining - backing off")
+            # Don't inject facts when user is complaining
+            return "\n".join(lines) if lines else ""
+        
+        # Get relevant facts (smart filtering applied)
         relevant_facts = cache.get_relevant_facts(keywords, max_facts=3)
         logger.info(f"   Relevant Facts Found: {len(relevant_facts)}")
         

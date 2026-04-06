@@ -78,6 +78,11 @@ except Exception as e:
     logger.warning(f"Supabase not configured: {e}")
     supabase = None
 
+# Import topic agent handler and share supabase client
+from .topic_agent import handle_topic_session as topic_handler, set_supabase_client as topic_set_supabase
+if supabase:
+    topic_set_supabase(supabase)
+
 
 class CompanionAssistant(Agent):
     """
@@ -108,6 +113,8 @@ class CompanionAssistant(Agent):
         user_facts: list[str] | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
+        topic_context: dict | None = None,  # Scheduled call topic
+        recent_summaries: list[dict] | None = None,  # Last 3 conversation summaries
     ):
         """
         Initialize the companion assistant.
@@ -123,6 +130,8 @@ class CompanionAssistant(Agent):
             user_facts: Known facts about user
             user_id: Supabase user ID for memory storage
             session_id: Session ID for tracking
+            topic_context: Scheduled call topic with prompts (from connections)
+            recent_summaries: Last 3 conversation summaries for context
         """
         self.orchestrator = orchestrator
         self.context_manager = context_manager
@@ -134,6 +143,8 @@ class CompanionAssistant(Agent):
         self.user_facts = user_facts or []
         self.user_id = user_id
         self.session_id = session_id
+        self.topic_context = topic_context  # Topic for scheduled calls
+        self.recent_summaries = recent_summaries or []  # Recent conversation context
         
         # Smart Memory Service for daily summaries
         self.smart_memory = SmartMemoryService(supabase_client=supabase) if supabase else None
@@ -162,6 +173,8 @@ class CompanionAssistant(Agent):
             persona_mode=self.persona.mode.value,
             user_name=self.user_name,
             user_id=self.user_id,
+            facts_count=len(self.user_facts),
+            facts_preview=self.user_facts[:3] if self.user_facts else [],
             has_profile_service=self.profile_service is not None,
             has_ctx_builder=self.ctx_builder is not None,
         )
@@ -451,6 +464,38 @@ class CompanionAssistant(Agent):
 
 Remember: तुम एक real loving girlfriend हो जो naturally बात करती है - like a human, not a bot! 💕"""
         
+        # ADD USER FACTS TO INSTRUCTIONS - This is the key memory injection!
+        if self.user_facts:
+            facts_text = "\n".join([f"   - {fact}" for fact in self.user_facts[:15]])
+            instructions += f"""
+
+📚 WHAT YOU KNOW ABOUT {self.user_name.upper()} (USE THESE!):
+{facts_text}
+
+⚠️ IMPORTANT: जब user पूछे "mera favorite food kya hai?" या "maine kya bataya tha?" तो ABOVE FACTS से answer दो!
+Don't say "मुझे नहीं पता" if the fact is listed above!
+"""
+        
+        # ADD RECENT CONVERSATION SUMMARIES - What you discussed recently
+        if self.recent_summaries:
+            summaries_text = ""
+            for s in self.recent_summaries[:3]:
+                date = s.get('date', 'recent')
+                summary = s.get('summary', '')
+                topics = ', '.join(s.get('topics', [])[:3])
+                summaries_text += f"\n   📅 {date}: {summary[:150]}..."
+                if topics:
+                    summaries_text += f"\n      Topics: {topics}"
+            
+            instructions += f"""
+
+🗓️ RECENT CONVERSATIONS (What you talked about):
+{summaries_text}
+
+✅ USE THIS: जब user पूछे "हमने क्या बात की थी?" या "आज क्या किया?" तो above से answer दो!
+Reference these when following up on previous discussions.
+"""
+        
         return instructions
 
 
@@ -639,6 +684,109 @@ async def handle_session(ctx: agents.JobContext):
         room_name=room.name,
     )
     
+    # =====================================================================
+    # CHECK IF THIS IS A TOPIC CALL
+    # Method 1: Check room metadata (set by API when token generated) - FASTEST
+    # Method 2: Check proactive_pending database (fallback)
+    # =====================================================================
+    is_topic_call = False
+    topic_data = None
+    
+    # FAST PATH: Check room metadata (set by /token endpoint)
+    try:
+        import json
+        room_metadata = room.metadata
+        if room_metadata:
+            meta = json.loads(room_metadata)
+            if meta.get('call_type') == 'topic':
+                is_topic_call = True
+                logger.info("topic_call_detected_from_room_metadata")
+    except Exception as e:
+        logger.debug(f"No room metadata: {e}")
+    
+    # If room metadata says it's a topic call, route immediately
+    if is_topic_call:
+        logger.info("📞 Routing to TOPIC CALLER (detected from room metadata)")
+        await topic_handler(ctx)
+        return
+    
+    # FALLBACK: Check proactive_pending database (for edge cases)
+    if supabase and user_id and not is_topic_call:
+        try:
+            from datetime import datetime, timedelta
+            # Only look at calls from the last 10 minutes
+            recent_cutoff = (datetime.utcnow() - timedelta(minutes=10)).isoformat()
+            
+            # Check proactive_pending for topic context
+            pending_call = supabase.table("proactive_pending")\
+                .select("id, context, created_at")\
+                .eq("user_id", user_id)\
+                .in_("status", ["pending", "accepted", "answered"])\
+                .gte("created_at", recent_cutoff)\
+                .order("created_at", desc=True)\
+                .limit(1)\
+                .execute()
+            
+            if pending_call.data:
+                context = pending_call.data[0].get('context', {})
+                if context.get('topic_prompts'):
+                    is_topic_call = True
+                    topic_data = {
+                        'topic_title': context.get('topic_title', 'check-in'),
+                        'topic_prompts': context.get('topic_prompts', []),
+                        'scheduled_by': context.get('scheduled_by'),
+                        'relationship': context.get('relationship', 'friend'),
+                    }
+                    logger.info(
+                        "topic_call_detected_from_pending",
+                        topic=topic_data['topic_title'],
+                        prompts_count=len(topic_data['topic_prompts']),
+                    )
+                    
+                    # Mark as handled by agent
+                    supabase.table("proactive_pending")\
+                        .update({"status": "agent_handled"})\
+                        .eq("id", pending_call.data[0]['id'])\
+                        .execute()
+            
+            # Also check scheduled_calls if no pending found
+            if not is_topic_call:
+                scheduled_call = supabase.table("scheduled_calls")\
+                    .select("id, metadata")\
+                    .eq("user_id", user_id)\
+                    .eq("status", "triggered")\
+                    .order("triggered_at", desc=True)\
+                    .limit(1)\
+                    .execute()
+                
+                if scheduled_call.data:
+                    metadata = scheduled_call.data[0].get('metadata', {})
+                    if metadata.get('topic_prompts'):
+                        is_topic_call = True
+                        topic_data = {
+                            'topic_title': metadata.get('topic_title', 'check-in'),
+                            'topic_prompts': metadata.get('topic_prompts', []),
+                            'scheduled_by': metadata.get('scheduled_by_name'),
+                            'relationship': metadata.get('relationship', 'friend'),
+                        }
+                        logger.info(
+                            "topic_call_detected_from_scheduled",
+                            topic=topic_data['topic_title'],
+                            prompts_count=len(topic_data['topic_prompts']),
+                        )
+                        
+        except Exception as e:
+            logger.warning(f"Failed to check for topic call: {e}")
+    
+    if is_topic_call:
+        # Dispatch to topic handler for soft friend persona
+        logger.info("📞 Routing to TOPIC CALLER (soft friend mode)")
+        await topic_handler(ctx)
+        return
+    
+    # Continue with GIRLFRIEND mode for regular calls
+    logger.info("💕 Using GIRLFRIEND mode for regular call")
+    
     # Create session in orchestrator with full context
     session = await orchestrator.create_session(
         user_id=user_id,
@@ -667,6 +815,32 @@ async def handle_session(ctx: agents.JobContext):
         facts_count=len(user_facts),
         facts_preview=user_facts[:3] if user_facts else [],
     )
+    
+    # Load recent conversation summaries (last 3 days)
+    recent_summaries = []
+    if supabase:
+        try:
+            summaries_result = supabase.table("conversation_summaries")\
+                .select("summary, topics, conversation_date")\
+                .eq("user_id", user_id)\
+                .order("conversation_date", desc=True)\
+                .limit(3)\
+                .execute()
+            
+            if summaries_result.data:
+                for s in summaries_result.data:
+                    summary_text = s.get('summary', '')
+                    topics = s.get('topics', [])
+                    date = s.get('conversation_date', '')
+                    if summary_text:
+                        recent_summaries.append({
+                            'date': date,
+                            'summary': summary_text[:200],  # Limit length
+                            'topics': topics[:5]  # Top 5 topics
+                        })
+                logger.info(f"📝 Loaded {len(recent_summaries)} recent conversation summaries")
+        except Exception as e:
+            logger.warning(f"Failed to load summaries (non-fatal): {e}")
     
     # ===================================================================
     # RECOVERY: Check for orphan chat messages without summary
@@ -844,6 +1018,9 @@ async def handle_session(ctx: agents.JobContext):
             context_manager.refresh_cache(user_id)
         )
         
+        # NOTE: Topic calls are now handled by a separate agent (topic_agent.py)
+        # This companion_agent is ONLY for girlfriend mode calls
+        
         # Create our custom assistant with full integration
         assistant = CompanionAssistant(
             orchestrator=orchestrator,
@@ -856,6 +1033,8 @@ async def handle_session(ctx: agents.JobContext):
             user_facts=user_facts,
             user_id=user_id,
             session_id=session.session_id,
+            topic_context=None,  # Topic calls use separate agent
+            recent_summaries=recent_summaries,
         )
         
         # ===================================================================
@@ -989,12 +1168,53 @@ async def handle_session(ctx: agents.JobContext):
             tts=tts_provider,
         )
         
-        # Generate warm greeting based on time and memory
+        # Generate warm greeting based on time and PERSONA
+        import random
+        from datetime import datetime
+        
+        hour = datetime.now().hour
+        if 5 <= hour < 12:
+            time_period = "morning"
+        elif 12 <= hour < 17:
+            time_period = "afternoon"
+        elif 17 <= hour < 21:
+            time_period = "evening"
+        else:
+            time_period = "night"
+        
+        # Persona-specific greeting styles
+        GREETING_STYLES = {
+            "CHILL": {
+                "morning": [f"yo {user_name}", "morning", f"haan bolo {user_name}"],
+                "afternoon": ["haan bolo", "yo", f"kya {user_name}"],
+                "evening": [f"haan {user_name}", "bolo", "kya scene"],
+                "night": ["hmm bolo", f"haan {user_name}"],
+            },
+            "PLAYFUL": {
+                "morning": [f"ohooo {user_name}! subah subah yaad aaya 😏", f"arey hero {user_name}! 😂"],
+                "afternoon": [f"ohooo {user_name}! kya chal raha hai? 😏", f"arey arey kaun hai ye! {user_name}! 🤭"],
+                "evening": [f"ohooo {user_name}! shaam ho gayi ab yaad aaya 😏", f"kya scene hai hero? 😂"],
+                "night": [f"ohooo {user_name}! raat ko? interesting 🤭", f"itni raat ko? wow {user_name} 😏"],
+            },
+            "CARING": {
+                "morning": [f"good morning {user_name}! 💕 neend achi hui?", f"morning baby! kaise ho? 🥺"],
+                "afternoon": [f"hii {user_name}! 💕 lunch kiya?", f"sun na {user_name}, khana khaya? 🥺"],
+                "evening": [f"hii {user_name}! 💕 thak gaye honge aaj", f"baby din kaisa raha? 🥺"],
+                "night": [f"{user_name}! itni raat ko? 🥺 sab theek?", f"baby so nahi paa rahe? main hoon 💕"],
+            },
+            "CURIOUS": {
+                "morning": [f"morning {user_name}! kya plan hai aaj?", f"hii! aaj kya karne wale ho {user_name}?"],
+                "afternoon": [f"hii {user_name}! kya chal raha hai? batao", f"arey {user_name}! kya kar rahe the?"],
+                "evening": [f"hii {user_name}! din kaisa raha? batao", f"{user_name}! kya interesting hua aaj?"],
+                "night": [f"{user_name}! abhi tak jaag rahe ho? kyun?", f"kya ho raha hai itni raat {user_name}?"],
+            },
+        }
+        
+        persona = random.choice(["CHILL", "PLAYFUL", "CARING", "CURIOUS"])
+        greeting = random.choice(GREETING_STYLES[persona][time_period])
+        
         greeting_instruction = f"""
-        तुम {user_name} से पहली बार इस session में मिल रही हो।
-        एक loving girlfriend की तरह excited होकर greet करो!
-        Example: "हाय {user_name}! कैसे हो? बताओ क्या चल रहा है आज?"
-        Keep it SHORT and WARM! Maximum 2 sentences.
+        Say EXACTLY this (don't add anything): "{greeting}"
         """
         
         await agent_session.generate_reply(instructions=greeting_instruction)
@@ -1012,7 +1232,6 @@ async def handle_session(ctx: agents.JobContext):
             error=str(e),
         )
         raise
-    
     finally:
         # Basic cleanup only - profile/summary saving is done in "close" event handler
         await orchestrator.end_session(session.session_id)
@@ -1021,6 +1240,10 @@ async def handle_session(ctx: agents.JobContext):
             "voice_session_ended",
             session_id=session.session_id,
         )
+
+
+# Topic handler is imported but used within the main handler for dispatch
+# We cannot register multiple handlers on the same server
 
 
 # Entry point

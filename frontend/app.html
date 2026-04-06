@@ -3,116 +3,277 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Synki - Your AI Girlfriend 💕</title>
+    <title>Synki - Your AI Companion 💕</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.0.0/dist/livekit-client.umd.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         :root {
-            --primary: #ff6b9d;
-            --primary-dark: #e91e63;
-            --secondary: #7c4dff;
-            --bg-dark: #1a1a2e;
-            --bg-card: rgba(255,255,255,0.05);
-            --text-primary: #ffffff;
-            --text-secondary: #b8b8d1;
-            --success: #4caf50;
-            --error: #f44336;
+            --primary: #f472b6;
+            --primary-glow: rgba(244, 114, 182, 0.5);
+            --primary-dark: #db2777;
+            --secondary: #a78bfa;
+            --secondary-glow: rgba(167, 139, 250, 0.4);
+            --accent: #22d3ee;
+            --accent-glow: rgba(34, 211, 238, 0.3);
+            --bg-deep: #0a0a1a;
+            --bg-dark: #0f0f23;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-glass: rgba(255, 255, 255, 0.05);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(244, 114, 182, 0.3);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --success: #34d399;
+            --error: #f87171;
+            --warning: #fbbf24;
+            --surface: rgba(30, 30, 50, 0.6);
+            --shadow-glow: 0 0 80px rgba(244, 114, 182, 0.15);
+            --shadow-card: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        html, body {
+            height: 100%;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, var(--bg-dark), #2d1f4e);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-deep);
             color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* ===== COSMIC BACKGROUND ===== */
+        .cosmic-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .cosmic-gradient {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(167, 139, 250, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(244, 114, 182, 0.12) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(34, 211, 238, 0.08) 0%, transparent 60%),
+                linear-gradient(180deg, var(--bg-deep) 0%, #0d0d1f 100%);
+        }
+
+        .stars {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(2px 2px at 20px 30px, rgba(255,255,255,0.8), transparent),
+                radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.5), transparent),
+                radial-gradient(1px 1px at 90px 40px, rgba(255,255,255,0.6), transparent),
+                radial-gradient(2px 2px at 130px 80px, rgba(255,255,255,0.4), transparent),
+                radial-gradient(1px 1px at 160px 120px, rgba(255,255,255,0.7), transparent);
+            background-size: 200px 200px;
+            animation: twinkle 8s ease-in-out infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .floating-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .orb-1 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, var(--primary-glow), transparent 70%);
+            top: -100px;
+            right: -100px;
+            animation-delay: 0s;
+        }
+
+        .orb-2 {
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, var(--secondary-glow), transparent 70%);
+            bottom: -50px;
+            left: -50px;
+            animation-delay: -7s;
+        }
+
+        .orb-3 {
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, var(--accent-glow), transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation-delay: -14s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(30px, -30px) scale(1.05); }
+            50% { transform: translate(-20px, 20px) scale(0.95); }
+            75% { transform: translate(-30px, -20px) scale(1.02); }
+        }
+
+        /* ===== MAIN LAYOUT ===== */
+        .app-wrapper {
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
+            padding: 20px;
         }
 
         /* ===== AUTH STYLES ===== */
         .auth-container {
-            max-width: 400px;
+            max-width: 420px;
             width: 100%;
             padding: 20px;
         }
 
         .auth-card {
-            background: var(--bg-card);
-            border-radius: 24px;
-            padding: 40px 30px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1);
+            background: var(--bg-glass);
+            border-radius: 32px;
+            padding: 48px 40px;
+            backdrop-filter: blur(40px);
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-card), var(--shadow-glow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .auth-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            opacity: 0.5;
         }
 
         .auth-logo {
-            font-size: 3rem;
+            font-size: 4rem;
             text-align: center;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 0 20px var(--primary-glow));
         }
 
         .auth-title {
-            font-size: 1.8rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.2rem;
+            font-weight: 700;
             text-align: center;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 50%, var(--accent) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: 8px;
+            letter-spacing: -0.5px;
         }
 
         .auth-subtitle {
             text-align: center;
             color: var(--text-secondary);
-            margin-bottom: 30px;
+            margin-bottom: 36px;
             font-size: 0.95rem;
+            font-weight: 400;
         }
 
         .input-group {
-            margin-bottom: 20px;
+            margin-bottom: 24px;
         }
 
         .input-group label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             color: var(--text-secondary);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .input-group input {
             width: 100%;
-            padding: 14px 18px;
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            background: rgba(0,0,0,0.2);
+            padding: 16px 20px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            background: rgba(0, 0, 0, 0.3);
             color: var(--text-primary);
             font-size: 1rem;
-            transition: all 0.3s;
+            font-family: inherit;
+            transition: all 0.3s ease;
         }
 
         .input-group input:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(255,107,157,0.2);
+            box-shadow: 0 0 0 4px var(--primary-glow), inset 0 0 20px rgba(244, 114, 182, 0.05);
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .input-group input::placeholder {
+            color: var(--text-muted);
         }
 
         .auth-btn {
             width: 100%;
-            padding: 16px;
+            padding: 18px;
             border: none;
-            border-radius: 12px;
+            border-radius: 16px;
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             font-size: 1.1rem;
             font-weight: 600;
+            font-family: inherit;
             cursor: pointer;
-            transition: all 0.3s;
-            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .auth-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .auth-btn:hover::before {
+            left: 100%;
         }
 
         .auth-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(255,107,157,0.4);
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px var(--primary-glow);
         }
 
         .auth-btn:disabled {
@@ -130,206 +291,394 @@
         .auth-switch a {
             color: var(--primary);
             text-decoration: none;
-            font-weight: 500;
+            font-weight: 600;
+            transition: color 0.2s;
         }
 
         .auth-switch a:hover {
+            color: var(--secondary);
             text-decoration: underline;
         }
 
         .auth-error {
-            background: rgba(244,67,54,0.2);
-            border: 1px solid var(--error);
+            background: rgba(248, 113, 113, 0.15);
+            border: 1px solid rgba(248, 113, 113, 0.3);
             color: var(--error);
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+            padding: 14px 18px;
+            border-radius: 12px;
+            margin-bottom: 24px;
             font-size: 0.9rem;
             text-align: center;
             display: none;
+            backdrop-filter: blur(10px);
         }
 
         .auth-error.show {
             display: block;
+            animation: shake 0.4s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
         }
 
         /* ===== MAIN APP STYLES ===== */
         .app-container {
-            max-width: 500px;
+            max-width: 480px;
             width: 100%;
-            padding: 20px;
+            padding: 0 20px;
             display: none;
         }
 
         .app-container.show {
             display: block;
+            animation: fadeInUp 0.6s ease;
         }
 
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Header */
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
+            padding: 16px 20px;
+            background: var(--bg-glass);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle);
         }
 
         .user-info {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 14px;
         }
 
         .user-avatar {
-            width: 45px;
-            height: 45px;
-            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
             background: linear-gradient(135deg, var(--secondary), var(--primary));
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 1.2rem;
+            font-weight: 600;
+            box-shadow: 0 4px 15px var(--primary-glow);
         }
 
         .user-name {
             font-weight: 600;
+            font-size: 1rem;
         }
 
         .user-email {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
         }
 
         .logout-btn {
-            padding: 10px 20px;
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 20px;
+            padding: 10px 18px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
             background: transparent;
-            color: var(--text-primary);
+            color: var(--text-secondary);
             cursor: pointer;
             transition: all 0.3s;
+            font-family: inherit;
+            font-size: 0.85rem;
         }
 
         .logout-btn:hover {
-            background: rgba(255,255,255,0.1);
+            background: rgba(248, 113, 113, 0.15);
+            border-color: var(--error);
+            color: var(--error);
+        }
+
+        /* Main Card */
+        .main-card {
+            background: var(--bg-glass);
+            border-radius: 32px;
+            padding: 32px;
+            backdrop-filter: blur(40px);
+            border: 1px solid var(--border-subtle);
+            box-shadow: var(--shadow-card);
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .main-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--primary), var(--secondary), transparent);
+            opacity: 0.4;
         }
 
         .logo {
-            font-size: 2.5rem;
-            font-weight: 600;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--secondary), var(--accent));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            background-clip: text;
             text-align: center;
-            margin-bottom: 10px;
-        }
-
-        .status {
-            display: inline-block;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            background: rgba(255,255,255,0.1);
-            margin: 0 auto 20px;
-            display: block;
-            text-align: center;
-            width: fit-content;
-        }
-        .status.connected { background: rgba(76,175,80,0.3); color: #4caf50; }
-        .status.waiting { background: rgba(255,193,7,0.3); color: #ffc107; }
-        .status.error { background: rgba(244,67,54,0.3); color: #f44336; }
-
-        .avatar-section {
-            text-align: center;
-        }
-
-        .avatar {
-            width: 160px;
-            height: 160px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 15px;
-            font-size: 4.5rem;
-            box-shadow: 0 10px 40px rgba(255, 107, 157, 0.3);
-            transition: all 0.3s;
-        }
-        .avatar.speaking {
-            animation: pulse 1s ease-in-out infinite;
-            box-shadow: 0 15px 60px rgba(255, 107, 157, 0.5);
-        }
-        .avatar.listening {
-            box-shadow: 0 10px 40px rgba(124, 77, 255, 0.4);
+            gap: 10px;
         }
 
-        @keyframes pulse {
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 18px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            background: var(--surface);
+            border: 1px solid var(--border-subtle);
+            margin: 0 auto 24px;
+            text-align: center;
+            width: fit-content;
+        }
+        
+        .status::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+        
+        .status.connected { 
+            background: rgba(52, 211, 153, 0.15);
+            border-color: rgba(52, 211, 153, 0.3);
+            color: var(--success);
+        }
+        .status.connected::before { background: var(--success); animation: pulse-dot 1.5s infinite; }
+        
+        .status.waiting { 
+            background: rgba(251, 191, 36, 0.15);
+            border-color: rgba(251, 191, 36, 0.3);
+            color: var(--warning);
+        }
+        .status.waiting::before { background: var(--warning); animation: pulse-dot 1s infinite; }
+        
+        .status.error { 
+            background: rgba(248, 113, 113, 0.15);
+            border-color: rgba(248, 113, 113, 0.3);
+            color: var(--error);
+        }
+        .status.error::before { background: var(--error); }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        /* Avatar Section */
+        .avatar-section {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .avatar-container {
+            position: relative;
+            width: 180px;
+            height: 180px;
+            margin: 0 auto 20px;
+        }
+
+        .avatar-glow {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--primary-glow), transparent 70%);
+            filter: blur(30px);
+            animation: avatar-breathe 4s ease-in-out infinite;
+        }
+
+        @keyframes avatar-breathe {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        .avatar {
+            position: relative;
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary), var(--accent));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px auto;
+            font-size: 4.5rem;
+            box-shadow: 
+                0 0 0 4px rgba(255,255,255,0.1),
+                0 20px 50px var(--primary-glow);
+            transition: all 0.4s ease;
+            z-index: 1;
+        }
+        
+        .avatar.speaking {
+            animation: speaking-pulse 0.8s ease-in-out infinite;
+            box-shadow: 
+                0 0 0 4px rgba(255,255,255,0.2),
+                0 0 60px var(--primary-glow),
+                0 0 100px var(--secondary-glow);
+        }
+        
+        .avatar.listening {
+            box-shadow: 
+                0 0 0 4px rgba(167, 139, 250, 0.3),
+                0 20px 50px var(--secondary-glow);
+        }
+
+        @keyframes speaking-pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.05); }
         }
 
-        .avatar-status {
-            color: var(--text-secondary);
-            font-size: 1rem;
-            margin-bottom: 20px;
+        .badges-row {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .persona-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            box-shadow: 0 4px 15px var(--primary-glow);
         }
 
         .emotion-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            background: rgba(124, 77, 255, 0.3);
-            margin-bottom: 15px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            background: var(--surface);
+            border: 1px solid var(--border-subtle);
         }
 
+        .avatar-status {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            font-weight: 400;
+        }
+
+        /* Transcript Box */
         .transcript-box {
-            background: var(--bg-card);
-            border-radius: 16px;
-            padding: 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+            padding: 18px;
             margin: 20px 0;
-            min-height: 150px;
-            max-height: 220px;
+            min-height: 160px;
+            max-height: 240px;
             overflow-y: auto;
             text-align: left;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .transcript-box::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .transcript-box::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .transcript-box::-webkit-scrollbar-thumb {
+            background: var(--border-subtle);
+            border-radius: 3px;
         }
 
         .message {
-            padding: 12px 16px;
-            border-radius: 16px;
-            margin-bottom: 10px;
-            font-size: 0.95rem;
+            padding: 14px 18px;
+            border-radius: 18px;
+            margin-bottom: 12px;
+            font-size: 0.9rem;
             position: relative;
+            animation: message-in 0.3s ease;
         }
+
+        @keyframes message-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .message.user {
-            background: rgba(124, 77, 255, 0.2);
+            background: linear-gradient(135deg, rgba(167, 139, 250, 0.2), rgba(167, 139, 250, 0.1));
             margin-left: 40px;
-            border-bottom-right-radius: 4px;
+            border-bottom-right-radius: 6px;
+            border: 1px solid rgba(167, 139, 250, 0.2);
         }
+        
         .message.assistant {
-            background: rgba(255, 107, 157, 0.2);
+            background: linear-gradient(135deg, rgba(244, 114, 182, 0.2), rgba(244, 114, 182, 0.1));
             margin-right: 40px;
-            border-bottom-left-radius: 4px;
+            border-bottom-left-radius: 6px;
+            border: 1px solid rgba(244, 114, 182, 0.2);
         }
+        
         .message.system {
-            background: rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.03);
             text-align: center;
-            font-size: 0.85rem;
-            color: var(--text-secondary);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            border: 1px solid var(--border-subtle);
         }
+        
         .message-label {
             font-size: 0.7rem;
             font-weight: 600;
             opacity: 0.7;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
+        
         .message-time {
             font-size: 0.65rem;
-            color: var(--text-secondary);
+            color: var(--text-muted);
             position: absolute;
-            bottom: 4px;
-            right: 10px;
+            bottom: 6px;
+            right: 12px;
         }
 
+        /* Controls */
         .controls {
             display: flex;
             gap: 12px;
@@ -338,63 +687,171 @@
         }
 
         .btn {
-            padding: 14px 32px;
+            padding: 14px 28px;
             border: none;
-            border-radius: 50px;
-            font-size: 1rem;
-            font-weight: 500;
+            border-radius: 16px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            font-family: inherit;
             cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
+            transition: all 0.3s ease;
+            display: inline-flex;
             align-items: center;
             gap: 8px;
         }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+        
+        .btn:disabled { 
+            opacity: 0.4; 
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .btn:hover:not(:disabled) { 
+            transform: translateY(-3px);
+        }
 
         .btn-connect {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
+            box-shadow: 0 8px 30px var(--primary-glow);
         }
+        
+        .btn-connect:hover:not(:disabled) {
+            box-shadow: 0 15px 40px var(--primary-glow);
+        }
+
         .btn-disconnect {
-            background: linear-gradient(135deg, var(--error), #c62828);
+            background: linear-gradient(135deg, var(--error), #dc2626);
             color: white;
+            box-shadow: 0 8px 30px rgba(248, 113, 113, 0.3);
         }
 
         .mic-status {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 30px;
+            gap: 10px;
+            padding: 14px 22px;
+            background: var(--surface);
+            border-radius: 16px;
             font-size: 0.9rem;
+            font-weight: 500;
+            border: 1px solid var(--border-subtle);
         }
-        .mic-status.active { background: rgba(76,175,80,0.3); }
+        
+        .mic-status.active { 
+            background: rgba(52, 211, 153, 0.15);
+            border-color: rgba(52, 211, 153, 0.3);
+        }
+        
         .mic-dot {
             width: 10px;
             height: 10px;
             border-radius: 50%;
             background: var(--error);
         }
+        
         .mic-status.active .mic-dot {
             background: var(--success);
-            animation: blink 1s infinite;
+            animation: mic-pulse 1s infinite;
+            box-shadow: 0 0 10px var(--success);
         }
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
+        
+        @keyframes mic-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.85); }
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 16px;
+        }
+
+        .btn-schedule {
+            background: linear-gradient(135deg, var(--secondary), #7c3aed);
+            color: white;
+            box-shadow: 0 8px 25px var(--secondary-glow);
+        }
+        
+        .btn-history {
+            background: linear-gradient(135deg, var(--accent), #0891b2);
+            color: white;
+            box-shadow: 0 8px 25px var(--accent-glow);
+        }
+
+        /* Scheduled Indicator */
+        .scheduled-indicator {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 20px;
+            background: linear-gradient(135deg, rgba(167, 139, 250, 0.15), rgba(244, 114, 182, 0.15));
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            border-radius: 16px;
+            margin-top: 16px;
+            animation: glow-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes glow-pulse {
+            0%, 100% { box-shadow: 0 0 20px transparent; }
+            50% { box-shadow: 0 0 30px var(--secondary-glow); }
+        }
+        
+        .scheduled-indicator .schedule-icon { 
+            font-size: 1.4rem;
+        }
+        
+        .scheduled-indicator .schedule-text {
+            flex: 1;
+            font-weight: 500;
+        }
+        
+        .scheduled-indicator #scheduledCountdown {
+            font-family: 'Space Grotesk', monospace;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--primary);
+        }
+        
+        .cancel-schedule-btn {
+            background: rgba(248, 113, 113, 0.2);
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            color: var(--error);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1rem;
+        }
+        
+        .cancel-schedule-btn:hover { 
+            background: rgba(248, 113, 113, 0.4);
+        }
+
+        /* Secondary Cards */
+        .secondary-card {
+            background: var(--bg-glass);
+            border-radius: 24px;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle);
+            margin-bottom: 16px;
         }
 
         .memory-section {
-            background: var(--bg-card);
-            border-radius: 16px;
-            padding: 16px;
-            margin-top: 20px;
+            background: var(--bg-glass);
+            border-radius: 24px;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle);
+            margin-bottom: 16px;
         }
 
         .memory-title {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 600;
             margin-bottom: 10px;
             color: var(--primary);
@@ -424,35 +881,48 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            background: linear-gradient(135deg, var(--bg-deep) 0%, #0d0d1f 50%, #1a0a2e 100%);
             z-index: 9999;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            animation: fadeIn 0.3s ease-out;
+            animation: overlay-in 0.4s ease-out;
         }
 
-        @keyframes fadeIn {
+        .incoming-call-overlay::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 50% 30%, var(--primary-glow) 0%, transparent 50%),
+                radial-gradient(ellipse at 30% 70%, var(--secondary-glow) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        @keyframes overlay-in {
             from { opacity: 0; }
             to { opacity: 1; }
         }
 
         .call-avatar-container {
             position: relative;
-            margin-bottom: 30px;
+            margin-bottom: 40px;
         }
 
         .call-avatar {
-            width: 150px;
-            height: 150px;
+            width: 160px;
+            height: 160px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), #ff8a65);
+            background: linear-gradient(135deg, var(--primary), var(--secondary), var(--accent));
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 60px;
-            box-shadow: 0 10px 40px rgba(255, 107, 157, 0.4);
+            font-size: 70px;
+            box-shadow: 
+                0 0 0 4px rgba(255,255,255,0.1),
+                0 20px 60px var(--primary-glow);
             position: relative;
             z-index: 2;
         }
@@ -462,44 +932,52 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 150px;
-            height: 150px;
+            width: 160px;
+            height: 160px;
             border-radius: 50%;
-            border: 3px solid rgba(255, 107, 157, 0.5);
-            animation: callPulse 1.5s ease-out infinite;
+            border: 2px solid var(--primary);
+            animation: ring-pulse 1.5s ease-out infinite;
         }
+        
         .pulse-ring:nth-child(2) { animation-delay: 0.5s; }
         .pulse-ring:nth-child(3) { animation-delay: 1s; }
 
-        @keyframes callPulse {
-            0% { width: 150px; height: 150px; opacity: 1; }
-            100% { width: 250px; height: 250px; opacity: 0; }
+        @keyframes ring-pulse {
+            0% { width: 160px; height: 160px; opacity: 0.8; }
+            100% { width: 280px; height: 280px; opacity: 0; }
         }
 
         .call-caller-name {
-            font-size: 32px;
-            font-weight: 600;
-            margin-bottom: 10px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .call-status-text {
-            font-size: 18px;
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 10px;
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 500;
         }
 
         .call-message {
-            font-size: 16px;
-            color: rgba(255, 255, 255, 0.6);
+            font-size: 1rem;
+            color: var(--text-muted);
             font-style: italic;
-            margin-bottom: 50px;
-            max-width: 300px;
+            margin-bottom: 60px;
+            max-width: 280px;
             text-align: center;
+            line-height: 1.5;
         }
 
         .call-buttons {
             display: flex;
-            gap: 60px;
+            gap: 80px;
         }
 
         .call-btn {
@@ -511,180 +989,1158 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 32px;
+            font-size: 2rem;
             transition: all 0.3s ease;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+            position: relative;
         }
 
-        .call-btn:hover { transform: scale(1.1); }
+        .call-btn::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: inherit;
+            filter: blur(20px);
+            opacity: 0.5;
+            z-index: -1;
+        }
+
+        .call-btn:hover { transform: scale(1.15); }
         .call-btn:active { transform: scale(0.95); }
 
         .decline-call-btn {
-            background: linear-gradient(135deg, #ff4757, #ff6b6b);
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            box-shadow: 0 10px 40px rgba(239, 68, 68, 0.4);
         }
 
         .accept-call-btn {
-            background: linear-gradient(135deg, #2ed573, #7bed9f);
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            box-shadow: 0 10px 40px rgba(34, 197, 94, 0.4);
+            animation: accept-pulse 1.5s ease-in-out infinite;
         }
 
-        /* ===== NOTIFICATION BADGE ===== */
-        .notification-badge {
+        @keyframes accept-pulse {
+            0%, 100% { box-shadow: 0 10px 40px rgba(34, 197, 94, 0.4); }
+            50% { box-shadow: 0 10px 60px rgba(34, 197, 94, 0.6); }
+        }
+
+        /* ===== MODAL STYLES ===== */
+        .modal-overlay {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            padding: 12px 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(255, 107, 157, 0.4);
-            cursor: pointer;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
             z-index: 1000;
-            animation: slideIn 0.3s ease-out;
-            max-width: 300px;
+            padding: 20px;
+            animation: modalFadeIn 0.3s ease;
         }
 
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+        @keyframes modalFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
 
-        .notification-badge .notif-title {
+        .modal-content {
+            background: var(--bg-dark);
+            border-radius: 28px;
+            width: 100%;
+            max-width: 480px;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 1px solid var(--border-subtle);
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5), 0 0 100px var(--primary-glow);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from { transform: translateY(30px) scale(0.95); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        .modal-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .modal-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .modal-content::-webkit-scrollbar-thumb {
+            background: var(--border-subtle);
+            border-radius: 3px;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 24px 28px;
+            border-bottom: 1px solid var(--border-subtle);
+            position: sticky;
+            top: 0;
+            background: var(--bg-dark);
+            z-index: 10;
+        }
+
+        .modal-header span {
+            font-size: 1.5rem;
+        }
+
+        .modal-header h2 {
+            flex: 1;
+            font-size: 1.3rem;
             font-weight: 600;
-            margin-bottom: 4px;
+            font-family: 'Space Grotesk', sans-serif;
         }
 
-        .notification-badge .notif-message {
-            font-size: 0.9rem;
-            opacity: 0.9;
-        }
-
-        .notification-badge .notif-close {
-            position: absolute;
-            top: 8px;
-            right: 10px;
-            background: none;
+        .modal-close {
+            width: 36px;
+            height: 36px;
             border: none;
+            border-radius: 12px;
+            background: var(--surface);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-close:hover {
+            background: rgba(248, 113, 113, 0.2);
+            color: var(--error);
+        }
+
+        .modal-body {
+            padding: 24px 28px;
+        }
+
+        /* Modal Tabs */
+        .modal-tabs {
+            display: flex;
+            gap: 8px;
+            padding: 0 28px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            background: var(--bg-dark);
+        }
+
+        .modal-tab {
+            flex: 1;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 12px;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            font-family: inherit;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .modal-tab:hover {
+            background: var(--surface);
+        }
+
+        .modal-tab.active {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .modal-tab .tab-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 20px;
+            height: 20px;
+            background: var(--error);
+            border-radius: 50%;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            animation: badgePulse 2s infinite;
+        }
+
+        @keyframes badgePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+            animation: tabFadeIn 0.3s ease;
+        }
+
+        @keyframes tabFadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Code Card */
+        .code-card {
+            background: linear-gradient(135deg, var(--primary), var(--secondary), #7c3aed);
+            padding: 28px;
+            border-radius: 24px;
+            text-align: center;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .code-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+            animation: shimmer 3s ease-in-out infinite;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { transform: translate(-30%, -30%); }
+            50% { transform: translate(30%, 30%); }
+        }
+
+        .code-card-label {
+            color: rgba(255,255,255,0.85);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .code-display {
+            font-family: 'Space Grotesk', monospace;
+            font-size: 2.8rem;
+            font-weight: 700;
+            color: white;
+            letter-spacing: 8px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            position: relative;
+        }
+
+        .code-display.loading {
+            animation: codePulse 1s ease-in-out infinite;
+        }
+
+        @keyframes codePulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .code-card-hint {
+            color: rgba(255,255,255,0.65);
+            font-size: 0.75rem;
+            margin-top: 14px;
+            position: relative;
+        }
+
+        .copy-code-btn {
+            margin-top: 16px;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 14px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .copy-code-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
+        }
+
+        .copy-code-btn.copied {
+            background: rgba(52, 211, 153, 0.3);
+            border-color: rgba(52, 211, 153, 0.5);
+        }
+
+        /* Search Section */
+        .search-section {
+            margin-bottom: 24px;
+        }
+
+        .search-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            display: block;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 12px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 16px 20px;
+            border: 2px solid var(--border-subtle);
+            border-radius: 16px;
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--text-primary);
+            font-size: 1.2rem;
+            font-family: 'Space Grotesk', monospace;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px var(--primary-glow);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+            letter-spacing: 2px;
+            font-size: 0.9rem;
+        }
+
+        .search-btn {
+            width: 56px;
+            height: 56px;
+            border: none;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             cursor: pointer;
-            font-size: 16px;
-            opacity: 0.7;
+            font-size: 1.3rem;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .notification-badge .notif-close:hover { opacity: 1; }
+        .search-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px var(--primary-glow);
+        }
+
+        .search-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .search-btn.loading {
+            pointer-events: none;
+        }
+
+        .search-btn.loading::after {
+            content: '';
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Search Result */
+        .search-result {
+            margin-top: 16px;
+            animation: resultFadeIn 0.3s ease;
+        }
+
+        @keyframes resultFadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .user-found-card {
+            background: var(--surface);
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .user-found-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .user-found-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 8px 25px var(--primary-glow);
+        }
+
+        .user-found-info {
+            flex: 1;
+        }
+
+        .user-found-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .user-found-code {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-family: 'Space Grotesk', monospace;
+            letter-spacing: 2px;
+        }
+
+        .connect-form {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .connect-relation-select {
+            flex: 1;
+            min-width: 120px;
+            padding: 12px 16px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            background: rgba(0,0,0,0.3);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .connect-relation-select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .send-request-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .send-request-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--primary-glow);
+        }
+
+        .send-request-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .search-error {
+            padding: 16px;
+            background: rgba(248, 113, 113, 0.1);
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            border-radius: 12px;
+            color: var(--error);
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        .search-not-found {
+            padding: 24px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .search-not-found-icon {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+
+        /* Connection Cards */
+        .connection-card {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px;
+            background: var(--surface);
+            border-radius: 16px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-subtle);
+            transition: all 0.2s;
+        }
+
+        .connection-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 20px rgba(244, 114, 182, 0.1);
+        }
+
+        .connection-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+            position: relative;
+        }
+
+        /* Online Status Indicator */
+        .status-indicator {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid var(--bg-dark);
+            background: var(--text-muted);
+        }
+
+        .status-indicator.online {
+            background: #22c55e;
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+
+        .status-indicator.in_call {
+            background: #f472b6;
+            box-shadow: 0 0 8px rgba(244, 114, 182, 0.6);
+            animation: statusPulse 1s ease-in-out infinite;
+        }
+
+        .status-indicator.away {
+            background: #fbbf24;
+        }
+
+        .status-indicator.busy {
+            background: #ef4444;
+        }
+
+        .status-indicator.offline {
+            background: var(--text-muted);
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+
+        .connection-info {
+            flex: 1;
+        }
+
+        .connection-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connection-status-text {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+        }
+
+        .connection-status-text.in_call {
+            background: rgba(244, 114, 182, 0.15);
+            color: var(--primary);
+        }
+
+        .connection-details {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 2px;
+        }
+
+        .connection-badge {
+            padding: 2px 8px;
+            background: rgba(167, 139, 250, 0.2);
+            border-radius: 6px;
+            font-size: 0.7rem;
+            color: var(--secondary);
+            text-transform: capitalize;
+        }
+
+        .connection-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .connection-btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .connection-btn-call {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+        }
+
+        .connection-btn-call:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--primary-glow);
+        }
+
+        .connection-btn-accept {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+        }
+
+        .connection-btn-accept:hover {
+            box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+        }
+
+        .connection-btn-reject {
+            background: rgba(248, 113, 113, 0.2);
+            color: var(--error);
+        }
+
+        .connection-btn-reject:hover {
+            background: rgba(248, 113, 113, 0.3);
+        }
+
+        /* Pending Request Card */
+        .pending-card {
+            border-left: 3px solid var(--primary);
+            animation: pendingPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pendingPulse {
+            0%, 100% { box-shadow: 0 0 0 transparent; }
+            50% { box-shadow: 0 0 20px var(--primary-glow); }
+        }
+
+        .pending-message {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Empty States */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            opacity: 0.4;
+        }
+
+        .empty-state-title {
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .empty-state-text {
+            font-size: 0.85rem;
+        }
+        
+        /* Scheduled Calls */
+        .scheduled-section {
+            margin-bottom: 16px;
+        }
+        
+        .scheduled-section-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .scheduled-call-card {
+            background: var(--surface-dark);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .scheduled-call-card.scheduled-by-me {
+            border-left: 3px solid var(--primary);
+        }
+        
+        .scheduled-call-info {
+            flex: 1;
+        }
+        
+        .scheduled-call-topic {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        
+        .scheduled-call-by {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        
+        .scheduled-call-time {
+            font-size: 0.8rem;
+            color: var(--primary);
+        }
+        
+        .scheduled-call-cancel {
+            background: rgba(255,100,100,0.1);
+            border: none;
+            color: #ff6464;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        
+        .scheduled-call-cancel:hover {
+            background: rgba(255,100,100,0.2);
+        }
+        
+        .loading-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        /* Section Headers */
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-primary);
+        }
+
+        .section-count {
+            padding: 4px 10px;
+            background: var(--surface);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Time Input */
+        .time-input {
+            width: 100%;
+            padding: 14px 18px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-family: inherit;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+        }
+
+        .time-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        /* Quick Options */
+        .quick-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .quick-btn {
+            padding: 10px 16px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .quick-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .quick-btn.selected {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-color: transparent;
+            color: white;
+        }
+
+        /* Modal Confirm Button */
+        .modal-confirm {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 8px;
+        }
+
+        .modal-confirm:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px var(--primary-glow);
+        }
+
+        .modal-confirm:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Call History */
+        .call-history-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .call-history-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px;
+            background: var(--surface);
+            border-radius: 14px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+        }
+
+        .call-history-item:hover {
+            background: var(--bg-glass);
+        }
+
+        .call-item-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .call-item-details {
+            flex: 1;
+        }
+
+        .call-item-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .call-item-time {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .call-item-duration {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-family: 'Space Grotesk', monospace;
+        }
+
+        .call-history-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        .call-history-empty span {
+            font-size: 2.5rem;
+            display: block;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+
+        /* Toast Notifications */
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+
+        @keyframes toastOut {
+            from { opacity: 1; transform: translateX(-50%) translateY(0); }
+            to { opacity: 0; transform: translateX(-50%) translateY(20px); }
+        }
+
+        /* Header Connect Button with Badge */
+        .btn-connect-social {
+            background: linear-gradient(135deg, var(--primary), #9333ea);
+            border: none;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            font-family: inherit;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .btn-connect-social:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--primary-glow);
+        }
+
+        .connect-badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 20px;
+            height: 20px;
+            background: var(--error);
+            border-radius: 50%;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            border: 2px solid var(--bg-dark);
+            animation: badgePulse 2s infinite;
+        }
     </style>
 </head>
 <body>
-    <!-- Auth Container -->
-    <div class="auth-container" id="authContainer">
-        <div class="auth-card">
-            <div class="auth-logo">💕</div>
-            <h1 class="auth-title">Synki</h1>
-            <p class="auth-subtitle">Your AI Girlfriend awaits...</p>
+    <!-- Cosmic Background -->
+    <div class="cosmic-bg">
+        <div class="cosmic-gradient"></div>
+        <div class="stars"></div>
+        <div class="floating-orb orb-1"></div>
+        <div class="floating-orb orb-2"></div>
+        <div class="floating-orb orb-3"></div>
+    </div>
 
-            <div class="auth-error" id="authError"></div>
+    <div class="app-wrapper">
+        <!-- Auth Container -->
+        <div class="auth-container" id="authContainer">
+            <div class="auth-card">
+                <div class="auth-logo">💕</div>
+                <h1 class="auth-title">Synki</h1>
+                <p class="auth-subtitle">Your AI Companion awaits...</p>
 
-            <!-- Login Form -->
-            <form id="loginForm">
-                <div class="input-group">
-                    <label>Email</label>
-                    <input type="email" id="loginEmail" placeholder="your@email.com" required>
-                </div>
-                <div class="input-group">
-                    <label>Password</label>
-                    <input type="password" id="loginPassword" placeholder="••••••••" required>
-                </div>
-                <button type="submit" class="auth-btn" id="loginBtn">💕 Login</button>
-                <p class="auth-switch">
-                    Don't have an account? <a href="#" id="showSignup">Sign up</a>
-                </p>
-            </form>
+                <div class="auth-error" id="authError"></div>
 
-            <!-- Signup Form -->
-            <form id="signupForm" class="hidden">
-                <div class="input-group">
-                    <label>Your Name</label>
-                    <input type="text" id="signupName" placeholder="What should I call you?" required>
+                <!-- Login Form -->
+                <form id="loginForm">
+                    <div class="input-group">
+                        <label>Email</label>
+                        <input type="email" id="loginEmail" placeholder="your@email.com" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Password</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="auth-btn" id="loginBtn">💕 Login</button>
+                    <p class="auth-switch">
+                        Don't have an account? <a href="#" id="showSignup">Sign up</a>
+                    </p>
+                </form>
+
+                <!-- Signup Form -->
+                <form id="signupForm" class="hidden">
+                    <div class="input-group">
+                        <label>Your Name</label>
+                        <input type="text" id="signupName" placeholder="What should I call you?" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Email</label>
+                        <input type="email" id="signupEmail" placeholder="your@email.com" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Password</label>
+                        <input type="password" id="signupPassword" placeholder="••••••••" minlength="6" required>
+                    </div>
+                    <button type="submit" class="auth-btn" id="signupBtn">💕 Create Account</button>
+                    <p class="auth-switch">
+                        Already have an account? <a href="#" id="showLogin">Login</a>
+                    </p>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main App -->
+        <div class="app-container" id="appContainer">
+            <!-- Header Card -->
+            <div class="header">
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">👤</div>
+                    <div>
+                        <div class="user-name" id="userName">User</div>
+                        <div class="user-email" id="userEmail">email@example.com</div>
+                    </div>
                 </div>
-                <div class="input-group">
-                    <label>Email</label>
-                    <input type="email" id="signupEmail" placeholder="your@email.com" required>
+                <div class="header-actions">
+                    <button class="btn-connect-social" onclick="openConnectionsModal()" id="connectSocialBtn">
+                        🤝 Connect
+                        <span class="connect-badge" id="headerRequestsBadge" style="display: none;">0</span>
+                    </button>
+                    <button class="logout-btn" id="logoutBtn">Logout</button>
                 </div>
-                <div class="input-group">
-                    <label>Password</label>
-                    <input type="password" id="signupPassword" placeholder="••••••••" minlength="6" required>
+            </div>
+
+            <!-- Main Card -->
+            <div class="main-card">
+                <h1 class="logo">💕 Synki</h1>
+                <div class="status" id="status">Click Connect to start</div>
+
+                <!-- Avatar Section -->
+                <div class="avatar-section">
+                    <div class="avatar-container">
+                        <div class="avatar-glow"></div>
+                        <div class="avatar" id="avatar">🥰</div>
+                    </div>
+                    <div class="badges-row">
+                        <div class="persona-badge" id="personaBadge">🎭 Connecting...</div>
+                        <div class="emotion-badge" id="emotionBadge">Mood: Ready to chat</div>
+                    </div>
+                    <p class="avatar-status" id="avatarStatus">Your AI Companion awaits...</p>
                 </div>
-                <button type="submit" class="auth-btn" id="signupBtn">💕 Create Account</button>
-                <p class="auth-switch">
-                    Already have an account? <a href="#" id="showLogin">Login</a>
-                </p>
-            </form>
+
+                <!-- Transcript -->
+                <div class="transcript-box" id="transcript">
+                    <div class="message system">Welcome back! 💕 Connect to talk with Synki</div>
+                </div>
+
+                <!-- Controls -->
+                <div class="controls">
+                    <button class="btn btn-connect" id="connectBtn">💕 Connect</button>
+                    <div class="mic-status" id="micStatus"><span class="mic-dot"></span><span>Mic Off</span></div>
+                    <button class="btn btn-disconnect" id="disconnectBtn" disabled>👋 Bye</button>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button class="btn btn-schedule" id="scheduleCallBtn" onclick="openScheduleModal()">⏰ Schedule</button>
+                    <button class="btn btn-history" id="callHistoryBtn" onclick="openCallHistory()">📱 History</button>
+                </div>
+
+                <!-- Scheduled Call Indicator -->
+                <div class="scheduled-indicator" id="scheduledIndicator">
+                    <span class="schedule-icon">⏰</span>
+                    <span class="schedule-text">Call in <span id="scheduledCountdown">--:--</span></span>
+                    <button class="cancel-schedule-btn" onclick="cancelScheduledCall()">✕</button>
+                </div>
+            </div>
+
+            <!-- Memory Section -->
+            <div class="memory-section" id="memorySection">
+                <div class="memory-title">🧠 Synki Remembers</div>
+                <div class="memory-items" id="memoryItems">
+                    <div class="memory-item">Loading memories...</div>
+                </div>
+            </div>
+
+            <!-- Prompt Viewer Section -->
+            <div class="memory-section" id="promptSection">
+                <div class="memory-title" style="cursor: pointer;" onclick="togglePromptViewer()">
+                    🤖 Agent Prompt <span id="promptToggle">▶</span>
+                </div>
+                <div id="promptViewer" style="display: none;">
+                    <button class="btn" onclick="loadAgentPrompt()" style="margin-bottom: 12px; padding: 10px 18px; font-size: 0.85rem; background: var(--surface); border: 1px solid var(--border-subtle);">🔄 Load Prompt</button>
+                    <div id="promptContent">Click "Load Prompt" to see the system prompt...</div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Main App -->
-    <div class="app-container" id="appContainer">
-        <div class="header">
-            <div class="user-info">
-                <div class="user-avatar" id="userAvatar">👤</div>
-                <div>
-                    <div class="user-name" id="userName">User</div>
-                    <div class="user-email" id="userEmail">email@example.com</div>
-                </div>
-            </div>
-            <button class="logout-btn" id="logoutBtn">Logout</button>
-        </div>
-
-        <h1 class="logo">💕 Synki</h1>
-        <div class="status" id="status">Click Connect to start</div>
-
-        <div class="avatar-section">
-            <div class="avatar" id="avatar">🥰</div>
-            <div class="emotion-badge" id="emotionBadge">Mood: Ready to chat</div>
-            <p class="avatar-status" id="avatarStatus">Your AI Girlfriend awaits...</p>
-        </div>
-
-        <div class="transcript-box" id="transcript">
-            <div class="message system">Welcome back! 💕 Connect to talk with Synki</div>
-        </div>
-
-        <div class="controls">
-            <button class="btn btn-connect" id="connectBtn">💕 Connect</button>
-            <div class="mic-status" id="micStatus"><span class="mic-dot"></span><span>Mic Off</span></div>
-            <button class="btn btn-disconnect" id="disconnectBtn" disabled>👋 Bye</button>
-        </div>
-
-        <div class="memory-section" id="memorySection">
-            <div class="memory-title">🧠 Synki Remembers</div>
-            <div class="memory-items" id="memoryItems">
-                <div class="memory-item">Loading memories...</div>
-            </div>
-        </div>
-
-        <!-- Prompt Viewer Section -->
-        <div class="memory-section" id="promptSection" style="margin-top: 20px;">
-            <div class="memory-title" style="cursor: pointer;" onclick="togglePromptViewer()">
-                🤖 Agent Prompt <span id="promptToggle">▶</span>
-            </div>
-            <div id="promptViewer" style="display: none; margin-top: 10px;">
-                <button class="btn" onclick="loadAgentPrompt()" style="margin-bottom: 10px; padding: 8px 16px; font-size: 14px;">🔄 Load Prompt</button>
-                <div id="promptContent" style="
-                    background: rgba(0,0,0,0.3);
-                    border-radius: 12px;
-                    padding: 15px;
-                    font-family: monospace;
-                    font-size: 12px;
-                    white-space: pre-wrap;
-                    max-height: 400px;
-                    overflow-y: auto;
-                    line-height: 1.6;
-                    color: #b8b8d1;
-                ">
-                    Click "Load Prompt" to see the system prompt...
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Incoming Call Overlay (hidden by default) -->
+    <!-- Incoming Call Overlay -->
     <div class="incoming-call-overlay hidden" id="incomingCallOverlay">
         <div class="call-avatar-container">
             <div class="pulse-ring"></div>
@@ -706,6 +2162,218 @@
         <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
     </audio>
 
+    <!-- Schedule Call Modal -->
+    <div class="modal-overlay hidden" id="scheduleModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>⏰</span>
+                <h2>Schedule a Call</h2>
+                <button class="modal-close" onclick="closeScheduleModal()">✕</button>
+            </div>
+            
+            <!-- Who to call -->
+            <div style="margin-bottom: 16px;">
+                <label style="color: var(--text-secondary); font-size: 0.85rem; display: block; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Who should Synki call?</label>
+                <select id="callRecipient" class="time-input" style="width: 100%;" onchange="toggleTopicSection()">
+                    <option value="self">🙋 Me</option>
+                </select>
+            </div>
+            
+            <!-- Topic (shown for family calls) -->
+            <div id="topicSection" style="margin-bottom: 15px; display: none;">
+                <label style="color: var(--text-secondary); font-size: 0.9rem; display: block; margin-bottom: 8px;">Call Topic</label>
+                <select id="callTopic" class="time-input" style="width: 100%;">
+                    <option value="">💕 General Check-in</option>
+                    <!-- Topics loaded dynamically -->
+                </select>
+            </div>
+            
+            <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">When should Synki call?</p>
+            
+            <div class="quick-options">
+                <button class="quick-btn" onclick="selectQuickTime(this, 1)">1 min</button>
+                <button class="quick-btn" onclick="selectQuickTime(this, 5)">5 min</button>
+                <button class="quick-btn" onclick="selectQuickTime(this, 10)">10 min</button>
+                <button class="quick-btn" onclick="selectQuickTime(this, 15)">15 min</button>
+                <button class="quick-btn" onclick="selectQuickTime(this, 30)">30 min</button>
+                <button class="quick-btn" onclick="selectQuickTime(this, 60)">1 hr</button>
+            </div>
+            
+            <label style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Or enter minutes:</label>
+            <input type="number" class="time-input" id="customMinutes" min="1" max="180" value="10">
+            
+            <button class="modal-confirm" onclick="confirmScheduleCall()">📞 Schedule Call</button>
+            
+            <p style="text-align: center; margin-top: 16px;">
+                <a href="#" onclick="openFamilyModal(); return false;" style="color: var(--primary); font-size: 0.85rem; text-decoration: none;">
+                    👨‍👩‍👧 Manage Family Members
+                </a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Family Members Modal -->
+    <div class="modal-overlay hidden" id="familyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>👨‍👩‍👧</span>
+                <h2>Family & Care</h2>
+                <button class="modal-close" onclick="closeFamilyModal()">✕</button>
+            </div>
+            <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.9rem;">
+                Add family members who Synki can call on your behalf
+            </p>
+            
+            <div id="familyList" style="margin-bottom: 16px;"></div>
+            
+            <button class="modal-confirm" style="background: var(--surface); border: 2px dashed var(--border-subtle);" onclick="showAddFamilyForm()">
+                ➕ Add Family Member
+            </button>
+            
+            <div id="addFamilyForm" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle);">
+                <input type="text" id="familyName" class="time-input" placeholder="Name (e.g., Mom)">
+                <select id="familyRelation" class="time-input">
+                    <option value="mom">👩 Mom</option>
+                    <option value="dad">👨 Dad</option>
+                    <option value="grandma">👵 Grandma</option>
+                    <option value="grandpa">👴 Grandpa</option>
+                    <option value="friend">🧑 Friend</option>
+                    <option value="other">👤 Other</option>
+                </select>
+                <input type="tel" id="familyPhone" class="time-input" placeholder="Phone (optional)">
+                <select id="familySpeakingPace" class="time-input">
+                    <option value="normal">🎤 Normal pace</option>
+                    <option value="slow">🐢 Slow (for elderly)</option>
+                    <option value="very_slow">🦥 Very slow</option>
+                </select>
+                <textarea id="familyNotes" class="time-input" placeholder="Notes (e.g., health conditions)" style="min-height: 70px; resize: vertical;"></textarea>
+                <button class="modal-confirm" onclick="saveFamilyMember()">💾 Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Synki Connections Modal -->
+    <div class="modal-overlay hidden" id="connectionsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>🤝</span>
+                <h2>Synki Connections</h2>
+                <button class="modal-close" onclick="closeConnectionsModal()">✕</button>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="modal-tabs">
+                <button class="modal-tab active" onclick="switchConnectionTab('my-code')" id="tabMyCode">
+                    🔑 My Code
+                </button>
+                <button class="modal-tab" onclick="switchConnectionTab('find')" id="tabFind">
+                    🔍 Find
+                </button>
+                <button class="modal-tab" onclick="switchConnectionTab('requests')" id="tabRequests">
+                    📬 Requests
+                    <span class="tab-badge" id="requestsBadge" style="display: none;">0</span>
+                </button>
+                <button class="modal-tab" onclick="switchConnectionTab('connected')" id="tabConnected">
+                    💕 Friends
+                </button>
+                <button class="modal-tab" onclick="switchConnectionTab('scheduled')" id="tabScheduled">
+                    ⏰ Scheduled
+                    <span class="tab-badge" id="scheduledBadge" style="display: none;">0</span>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Tab 1: My Code -->
+                <div class="tab-panel active" id="panelMyCode">
+                    <div class="code-card">
+                        <div class="code-card-label">Your Synki Code</div>
+                        <div class="code-display" id="mySynkiCode">------</div>
+                        <div class="code-card-hint">Share this code with friends & family to connect</div>
+                        <button class="copy-code-btn" onclick="copyMyCode()" id="copyCodeBtn">
+                            <span>📋</span> Copy Code
+                        </button>
+                    </div>
+                    
+                    <div style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 0.9rem;">
+                        <p style="margin-bottom: 12px;">💡 <strong>How it works:</strong></p>
+                        <p style="font-size: 0.85rem; line-height: 1.6;">
+                            1. Share your code with someone<br>
+                            2. They enter it in the "Find" tab<br>
+                            3. Accept their request in "Requests"<br>
+                            4. Now you're connected! 🎉
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Tab 2: Find User -->
+                <div class="tab-panel" id="panelFind">
+                    <div class="search-section">
+                        <label class="search-label">Enter someone's Synki code</label>
+                        <div class="search-box">
+                            <input type="text" 
+                                   id="connectCode" 
+                                   class="search-input" 
+                                   placeholder="ABC123" 
+                                   maxlength="6"
+                                   onkeyup="handleSearchKeyup(event)">
+                            <button class="search-btn" onclick="searchUserByCode()" id="searchBtn">
+                                🔍
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="searchResult" class="search-result" style="display: none;"></div>
+                    
+                    <div id="searchPlaceholder" class="empty-state">
+                        <div class="empty-state-icon">🔍</div>
+                        <div class="empty-state-title">Find someone to connect</div>
+                        <div class="empty-state-text">Enter their 6-character Synki code above</div>
+                    </div>
+                </div>
+                
+                <!-- Tab 3: Pending Requests -->
+                <div class="tab-panel" id="panelRequests">
+                    <div id="pendingRequestsList"></div>
+                    <div id="sentRequestsList" style="margin-top: 24px;"></div>
+                </div>
+                
+                <!-- Tab 4: Connected Friends -->
+                <div class="tab-panel" id="panelConnected">
+                    <div id="connectionsList"></div>
+                </div>
+                
+                <!-- Tab 5: Scheduled Calls -->
+                <div class="tab-panel" id="panelScheduled">
+                    <div id="scheduledCallsList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⏰</div>
+                            <div class="empty-state-title">No scheduled calls</div>
+                            <div class="empty-state-text">Schedule calls from the main screen or from a friend's profile</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Call History Modal -->
+    <div class="modal-overlay hidden" id="callHistoryModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>📱</span>
+                <h2>Call History</h2>
+                <button class="modal-close" onclick="closeCallHistory()">✕</button>
+            </div>
+            <div class="call-history-list" id="callHistoryList">
+                <div class="call-history-empty">
+                    <span>📞</span>
+                    <p>No calls yet</p>
+                    <p style="font-size: 0.85rem; margin-top: 4px;">Start a conversation!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // ===== CONFIGURATION =====
         const API_BASE = 'http://localhost:8000';
@@ -714,6 +2382,22 @@
         const LIVEKIT_URL = 'wss://synk-wtut6pa9.livekit.cloud';
         const API_KEY = 'APIQN76asqnXxN9';
         const API_SECRET = 'MGVLskd6sFPvL8L6SJ0Nn6m7dogVSkWy7BKWGWOkfLZ';
+        
+        // Firebase Configuration - UPDATE THESE WITH YOUR FIREBASE PROJECT SETTINGS
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyCkrsx1yzszd4hSSnqEHvdUmik8eae2D7E",
+            authDomain: "synciki.firebaseapp.com",
+            projectId: "synciki",
+            storageBucket: "synciki.firebasestorage.app",
+            messagingSenderId: "180478332313",
+            appId: "1:180478332313:web:08015f238e6903521bd708",
+            vapidKey: "BBiC1rsVVabPJhCAthXjApxMzArsmNNDvOoqHFnFLMkEged_UxSa4kCar5xMJPS7JBev1t9zeD-JmRk13OhnAbQ"
+        };
+        
+        // Firebase variables
+        let firebaseApp = null;
+        let firebaseMessaging = null;
+        let pushToken = null;
 
         // Initialize Supabase (for data only, auth via API)
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -862,6 +2546,36 @@
             if (room) await room.disconnect();
         };
 
+        // Audio context for unlocking audio playback
+        let audioContext = null;
+        let audioUnlocked = false;
+        
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            
+            // Create audio context
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Unlock by playing silent audio
+            const silentBuffer = audioContext.createBuffer(1, 1, 22050);
+            const source = audioContext.createBufferSource();
+            source.buffer = silentBuffer;
+            source.connect(audioContext.destination);
+            source.start(0);
+            
+            // Also pre-load ringtone
+            const ringtone = document.getElementById('ringtone');
+            ringtone.load();
+            
+            audioUnlocked = true;
+            console.log('🔊 Audio unlocked');
+        }
+        
+        // Unlock audio on any user interaction
+        document.addEventListener('click', unlockAudio, { once: true });
+        document.addEventListener('touchstart', unlockAudio, { once: true });
+        document.addEventListener('keydown', unlockAudio, { once: true });
+
         // Show App
         async function showApp(user, name) {
             currentUser = user;
@@ -879,20 +2593,150 @@
             
             // Start proactive polling (checks for incoming calls/messages)
             startProactivePolling();
+            
+            // Initialize push notifications
+            await initializePushNotifications();
+            
+            // Start presence tracking (online status)
+            startPresenceTracking();
+        }
+        
+        // ===== PUSH NOTIFICATIONS (Firebase) =====
+        async function initializePushNotifications() {
+            // Check if Firebase config is set
+            if (FIREBASE_CONFIG.apiKey === "YOUR_FIREBASE_API_KEY") {
+                console.log('⚠️ Firebase not configured - push notifications disabled');
+                return;
+            }
+            
+            try {
+                // Initialize Firebase
+                if (!firebaseApp) {
+                    firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+                    firebaseMessaging = firebase.messaging();
+                    console.log('🔥 Firebase initialized');
+                }
+                
+                // Request notification permission
+                const permission = await Notification.requestPermission();
+                console.log('🔔 Notification permission:', permission);
+                
+                if (permission === 'granted') {
+                    // Get FCM token
+                    await registerPushToken();
+                    
+                    // Listen for foreground messages
+                    firebaseMessaging.onMessage((payload) => {
+                        console.log('📩 Foreground message:', payload);
+                        handleForegroundMessage(payload);
+                    });
+                } else {
+                    console.log('❌ Notification permission denied');
+                }
+            } catch (error) {
+                console.error('Firebase init error:', error);
+            }
+        }
+        
+        async function registerPushToken() {
+            try {
+                // Register service worker
+                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                console.log('📋 Service worker registered');
+                
+                // Get FCM token
+                const token = await firebaseMessaging.getToken({
+                    vapidKey: FIREBASE_CONFIG.vapidKey, // Optional VAPID key
+                    serviceWorkerRegistration: registration
+                });
+                
+                if (token) {
+                    pushToken = token;
+                    console.log('🎫 FCM Token:', token.substring(0, 20) + '...');
+                    
+                    // Register token with our backend
+                    const response = await fetch(`${API_BASE}/api/push/register`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accessToken}`
+                        },
+                        body: JSON.stringify({
+                            token: token,
+                            platform: 'web',
+                            browser: navigator.userAgent.includes('Chrome') ? 'Chrome' : 
+                                     navigator.userAgent.includes('Firefox') ? 'Firefox' : 
+                                     navigator.userAgent.includes('Safari') ? 'Safari' : 'Other'
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        console.log('✅ Push token registered with server');
+                    }
+                }
+            } catch (error) {
+                console.error('Push token registration error:', error);
+            }
+        }
+        
+        function handleForegroundMessage(payload) {
+            console.log('📱 FCM foreground message:', payload);
+            
+            // Show notification manually when app is in foreground
+            const notificationTitle = payload.notification?.title || 'Synki 💕';
+            const notificationOptions = {
+                body: payload.notification?.body || 'New message from Synki!',
+                icon: '/icons/synki-icon-192.png',
+                tag: 'synki-notification',
+                requireInteraction: true,
+                data: payload.data
+            };
+            
+            // Check if this is a call notification
+            if (payload.data?.type === 'incoming_call') {
+                // Show incoming call UI with ringtone
+                showIncomingCall({ message: payload.notification?.body || "Synki is calling..." });
+                
+                // Also show browser notification
+                new Notification('📞 ' + notificationTitle, {
+                    ...notificationOptions,
+                    body: 'Tap to answer!',
+                    tag: 'synki-call'
+                });
+            } else {
+                // Show regular notification
+                new Notification(notificationTitle, notificationOptions);
+            }
+        }
+        
+        async function testPushNotification() {
+            try {
+                const response = await fetch(`${API_BASE}/api/push/test`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const result = await response.json();
+                console.log('Test push result:', result);
+                alert(result.success ? 'Test notification sent!' : 'Failed: ' + result.error);
+            } catch (error) {
+                console.error('Test push error:', error);
+            }
         }
 
-        // Load memories
+        // Load memories - via API (bypasses RLS)
         async function loadMemories() {
             try {
-                const { data } = await supabaseClient
-                    .from('memories')
-                    .select('*')
-                    .eq('user_id', currentUser.id)
-                    .single();
-
-                if (data) {
-                    userMemories = data;
-                    displayMemories();
+                const response = await fetch(`${API_BASE}/api/memories/${currentUser.id}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data) {
+                        userMemories = data;
+                        displayMemories();
+                    }
                 }
             } catch (err) {
                 console.log('No memories yet');
@@ -1007,6 +2851,23 @@
             emotionBadge.textContent = `Mood: ${emotion}`;
         }
 
+        // Update persona display
+        const personaDescriptions = {
+            'CHILL': 'Chill & Relaxed 😎',
+            'PLAYFUL': 'Playful & Mischievous 😜',
+            'CARING': 'Sweet & Caring 🥰',
+            'CURIOUS': 'Curious & Interested 🤔'
+        };
+        
+        function updatePersonaDisplay(persona, emoji) {
+            const personaBadge = document.getElementById('personaBadge');
+            if (personaBadge) {
+                const desc = personaDescriptions[persona] || `${emoji} ${persona}`;
+                personaBadge.textContent = desc;
+                personaBadge.style.opacity = '1';
+            }
+        }
+
         // Generate JWT Token
         async function createToken(identity, roomName) {
             const b64url = str => btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
@@ -1048,6 +2909,8 @@
         }
 
         // Connect
+        let currentCallType = 'companion'; // 'companion' or 'topic'
+        
         connectBtn.onclick = async () => {
             try {
                 connectBtn.disabled = true;
@@ -1056,16 +2919,20 @@
                 const roomName = `synki-${currentUser?.id || Date.now()}`;
                 
                 // Call API to get token AND dispatch agent
-                console.log('🔌 Requesting token from API...');
+                console.log(`🔌 Requesting token from API (agent: ${currentCallType})...`);
                 const tokenResponse = await fetch(`${API_BASE}/token`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         user_id: currentUser.id,
                         room_name: roomName,
-                        user_name: userMemories?.name || 'Baby'
+                        user_name: userMemories?.name || 'Baby',
+                        agent_type: currentCallType
                     })
                 });
+                
+                // Reset call type after use
+                currentCallType = 'companion';
                 
                 if (!tokenResponse.ok) {
                     throw new Error(`Token request failed: ${tokenResponse.status}`);
@@ -1128,7 +2995,7 @@
                     }
                 });
 
-                // Data received (for transcripts)
+                // Data received (for transcripts and persona)
                 room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant) => {
                     try {
                         const data = JSON.parse(new TextDecoder().decode(payload));
@@ -1139,6 +3006,10 @@
                             } else {
                                 addMessage('assistant', data.text);
                             }
+                        } else if (data.type === 'persona_update') {
+                            // Update UI with current persona
+                            updatePersonaDisplay(data.persona, data.persona_emoji);
+                            console.log('🎭 Persona:', data.persona);
                         }
                     } catch (e) {}
                 });
@@ -1173,8 +3044,14 @@
             setStatus('Disconnected', '');
             avatarStatusEl.textContent = 'Click Connect to talk again 💕';
             avatarEl.classList.remove('speaking', 'listening');
+            // Reset persona badge
+            const personaBadge = document.getElementById('personaBadge');
+            if (personaBadge) personaBadge.textContent = '🎭 Connecting...';
             updateUI(false);
             addMessage('system', '👋 Bye bye baby! Miss you...');
+            
+            // Update presence to online (no longer in call)
+            updateMyPresence('online', 'browsing');
         }
 
         function setStatus(text, className) {
@@ -1187,6 +3064,11 @@
             disconnectBtn.disabled = !connected;
             micStatus.classList.toggle('active', connected);
             micStatus.querySelector('span:last-child').textContent = connected ? 'Mic On 🎤' : 'Mic Off';
+            
+            // Update presence when connecting
+            if (connected) {
+                updateMyPresence('in_call', 'talking_to_synki');
+            }
         }
 
         // ===== INITIALIZATION =====
@@ -1275,6 +3157,30 @@
             } catch (e) {
                 console.log('🔔 Proactive check failed:', e);
             }
+            
+            // Also check for connection requests (silently update badge)
+            try {
+                await checkConnectionRequests();
+            } catch (e) {
+                console.log('🔔 Connection check failed:', e);
+            }
+        }
+        
+        // Check for pending connection requests (updates badge)
+        async function checkConnectionRequests() {
+            if (!accessToken) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/connections`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                
+                pendingRequests = data.pending_requests || [];
+                updateRequestsBadge();
+            } catch (e) {
+                // Silently fail
+            }
         }
 
         // Handle a proactive contact
@@ -1293,25 +3199,61 @@
             document.getElementById('callMessage').textContent = contact.message || 'Miss kar rahi thi...';
             document.getElementById('incomingCallOverlay').classList.remove('hidden');
             
-            // Play ringtone
+            // Play ringtone (try multiple times)
             const ringtone = document.getElementById('ringtone');
-            ringtone.volume = 0.5;
-            ringtone.play().catch(e => console.log('Autoplay blocked'));
+            ringtone.volume = 0.7;
+            ringtone.currentTime = 0;
             
-            // Vibrate if supported
+            const playRingtone = () => {
+                ringtone.play().then(() => {
+                    console.log('🔔 Ringtone playing!');
+                }).catch(e => {
+                    console.log('⚠️ Autoplay blocked, retrying on interaction...');
+                    // Retry on next user interaction
+                    document.addEventListener('click', () => {
+                        ringtone.play().catch(() => {});
+                    }, { once: true });
+                });
+            };
+            
+            playRingtone();
+            
+            // Vibrate pattern (phone-like ringing)
             if ('vibrate' in navigator) {
-                navigator.vibrate([500, 300, 500, 300, 500]);
+                // Ring pattern: vibrate 1s, pause 0.5s, repeat
+                const vibratePattern = () => {
+                    navigator.vibrate([1000, 500, 1000, 500, 1000, 500, 1000]);
+                };
+                vibratePattern();
+                // Repeat vibration every 5 seconds
+                window.vibrateInterval = setInterval(vibratePattern, 5000);
+            }
+            
+            // Show desktop notification too (in case tab is in background)
+            if (Notification.permission === 'granted') {
+                new Notification('📞 Synki is calling!', {
+                    body: contact.message || 'Tap to answer',
+                    icon: '/icons/synki-icon-192.png',
+                    tag: 'synki-incoming-call',
+                    requireInteraction: true
+                });
             }
         }
 
         // Accept proactive call
         async function acceptProactiveCall() {
-            // Stop ringtone
+            // Stop ringtone and vibration
             document.getElementById('ringtone').pause();
+            document.getElementById('ringtone').currentTime = 0;
+            if (window.vibrateInterval) clearInterval(window.vibrateInterval);
             navigator.vibrate && navigator.vibrate(0);
             
             // Hide overlay
             document.getElementById('incomingCallOverlay').classList.add('hidden');
+            
+            // Check if this is a topic call (scheduled by someone with specific questions)
+            let isTopicCall = false;
+            let topicContext = null;
             
             // Answer the call on backend
             if (currentPendingContact) {
@@ -1323,17 +3265,35 @@
                     });
                     const data = await response.json();
                     
+                    console.log('📞 Proactive answer response:', data);
+                    
                     // Store greeting for agent to use
                     if (data.greeting) {
                         sessionStorage.setItem('proactive_greeting', data.greeting);
+                    }
+                    
+                    // Check if context has topic prompts (scheduled topic call)
+                    topicContext = data.context || {};
+                    console.log('📋 Topic context:', topicContext);
+                    console.log('📋 Topic prompts:', topicContext.topic_prompts);
+                    
+                    if (topicContext.topic_prompts && topicContext.topic_prompts.length > 0) {
+                        isTopicCall = true;
+                        console.log('✅ TOPIC CALL DETECTED! Prompts:', topicContext.topic_prompts);
+                    } else {
+                        console.log('❌ No topic prompts - using girlfriend mode');
                     }
                 } catch (e) {
                     console.log('Failed to answer:', e);
                 }
             }
             
+            // Set call type before connecting
+            currentCallType = isTopicCall ? 'topic' : 'companion';
+            console.log(`📞 Connecting with agent type: ${currentCallType}`);
+            
             // Auto-connect to voice agent
-            addMessage('system', '📞 Synki called you! Connecting...');
+            addMessage('system', isTopicCall ? `📞 Topic call: ${topicContext.topic_title || 'Check-in'} - Connecting...` : '📞 Synki called you! Connecting...');
             connectBtn.click();
             
             currentPendingContact = null;
@@ -1341,8 +3301,10 @@
 
         // Decline proactive call
         async function declineProactiveCall() {
-            // Stop ringtone
+            // Stop ringtone and vibration
             document.getElementById('ringtone').pause();
+            document.getElementById('ringtone').currentTime = 0;
+            if (window.vibrateInterval) clearInterval(window.vibrateInterval);
             navigator.vibrate && navigator.vibrate(0);
             
             // Hide overlay
@@ -1513,6 +3475,1463 @@
                 }
             }
         }
+
+        // ===== SCHEDULE CALL FUNCTIONS =====
+        let scheduledCallTime = null;
+        let scheduledCallId = null;
+        let scheduledCallInterval = null;
+        let scheduledCallTimeout = null;
+        
+        // Family and topics data
+        let familyMembers = [];
+        let synkiConnections = [];  // Synki users (have their own app)
+        let callTopics = [];
+
+        async function openScheduleModal() {
+            document.getElementById('scheduleModal').classList.remove('hidden');
+            document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('selected'));
+            document.getElementById('customMinutes').value = 10;
+            
+            // Load family members, Synki connections, and topics
+            await loadFamilyMembers();
+            await loadSynkiConnections();
+            await loadCallTopics();
+        }
+        
+        async function loadFamilyMembers() {
+            try {
+                const response = await fetch(`${API_BASE}/api/linked-users/${currentUser.id}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                familyMembers = data.users || [];
+                
+                updateRecipientDropdown();
+            } catch (e) {
+                console.error('Failed to load family:', e);
+            }
+        }
+        
+        async function loadSynkiConnections() {
+            try {
+                const response = await fetch(`${API_BASE}/api/connections?status=accepted`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                synkiConnections = data.connections || [];
+                
+                updateRecipientDropdown();
+            } catch (e) {
+                console.error('Failed to load connections:', e);
+            }
+        }
+        
+        function updateRecipientDropdown() {
+            const select = document.getElementById('callRecipient');
+            select.innerHTML = '<option value="self">🙋 Me</option>';
+            
+            // Add Synki connections first (they have the app)
+            if (synkiConnections.length > 0) {
+                select.innerHTML += '<optgroup label="📱 Synki Friends (have the app)">';
+                synkiConnections.forEach(conn => {
+                    select.innerHTML += `<option value="connection:${conn.connection_id}">💜 ${conn.other_user_name || 'Friend'}</option>`;
+                });
+                select.innerHTML += '</optgroup>';
+            }
+            
+            // Add linked family members (don't have the app)
+            if (familyMembers.length > 0) {
+                select.innerHTML += '<optgroup label="👨‍👩‍👧 Family (no app)">';
+                familyMembers.forEach(member => {
+                    const emoji = member.avatar_emoji || '👤';
+                    select.innerHTML += `<option value="linked:${member.id}">${emoji} ${member.name}</option>`;
+                });
+                select.innerHTML += '</optgroup>';
+            }
+        }
+        
+        async function loadCallTopics() {
+            try {
+                const response = await fetch(`${API_BASE}/api/call-topics/${currentUser.id}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                callTopics = data.topics || [];
+                
+                // Update dropdown
+                const select = document.getElementById('callTopic');
+                select.innerHTML = '<option value="">💕 General Check-in</option>';
+                
+                callTopics.forEach(topic => {
+                    const emoji = topic.emoji || '💬';
+                    select.innerHTML += `<option value="${topic.id}">${emoji} ${topic.title}</option>`;
+                });
+            } catch (e) {
+                console.error('Failed to load topics:', e);
+            }
+        }
+        
+        function toggleTopicSection() {
+            const recipient = document.getElementById('callRecipient').value;
+            const topicSection = document.getElementById('topicSection');
+            topicSection.style.display = recipient === 'self' ? 'none' : 'block';
+        }
+
+        function closeScheduleModal() {
+            document.getElementById('scheduleModal').classList.add('hidden');
+        }
+
+        function selectQuickTime(btn, minutes) {
+            document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            document.getElementById('customMinutes').value = minutes;
+        }
+
+        async function confirmScheduleCall() {
+            const minutes = parseInt(document.getElementById('customMinutes').value) || 10;
+            const recipient = document.getElementById('callRecipient').value;
+            const topicId = document.getElementById('callTopic').value;
+            const topic = callTopics.find(t => t.id === topicId);
+            
+            if (minutes < 1 || minutes > 180) {
+                alert('Please enter 1-180 minutes');
+                return;
+            }
+
+            const scheduledAt = new Date(Date.now() + (minutes * 60 * 1000));
+            
+            // Parse recipient type
+            const [recipientType, recipientId] = recipient.includes(':') ? recipient.split(':') : ['self', null];
+            
+            if (recipientType === 'self' || recipient === 'self') {
+                // Regular self call
+                scheduledCallTime = scheduledAt.getTime();
+                
+                try {
+                    const response = await fetch(`${API_BASE}/api/schedule/${currentUser.id}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accessToken}`
+                        },
+                        body: JSON.stringify({
+                            scheduled_at: scheduledAt.toISOString(),
+                            call_type: 'scheduled',
+                            message: `Scheduled call - ${minutes} min timer! 💕`
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        scheduledCallId = data.call_id;
+                        localStorage.setItem('scheduledCallTime', scheduledCallTime.toString());
+                        localStorage.setItem('scheduledCallId', scheduledCallId);
+                        
+                        closeScheduleModal();
+                        
+                        // Show indicator
+                        document.getElementById('scheduledIndicator').style.display = 'flex';
+                        document.getElementById('scheduleCallBtn').style.display = 'none';
+                        
+                        // Start countdown
+                        updateScheduleCountdown();
+                        scheduledCallInterval = setInterval(updateScheduleCountdown, 1000);
+                        
+                        // Set backup timeout
+                        scheduledCallTimeout = setTimeout(triggerScheduledCall, (minutes * 60 * 1000) + 30000);
+                        
+                        addMessage('system', `⏰ Synki will call you in ${minutes} minute${minutes > 1 ? 's' : ''}! 💕`);
+                    } else {
+                        alert('Failed to schedule call');
+                    }
+                } catch (error) {
+                    console.error('Schedule error:', error);
+                    alert('Failed to schedule call');
+                }
+            } else if (recipientType === 'connection') {
+                // Call to Synki connection (they have the app)
+                try {
+                    const conn = synkiConnections.find(c => c.connection_id === recipientId);
+                    const topicName = topic?.title || 'check-in';
+                    
+                    const response = await fetch(`${API_BASE}/api/connections/${recipientId}/schedule-call`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accessToken}`
+                        },
+                        body: JSON.stringify({
+                            scheduled_at: scheduledAt.toISOString(),
+                            message: topic ? `${topic.emoji} ${topic.title}` : 'Synki wants to chat! 💕',
+                            topic_id: topicId || null,
+                            topic_prompts: topic?.prompts || []
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        closeScheduleModal();
+                        const friendName = conn?.other_user_name || 'your friend';
+                        addMessage('system', `💜 Synki will call ${friendName} in ${minutes} minute${minutes > 1 ? 's' : ''} to talk about ${topicName}! 📱`);
+                        showToast(`Call scheduled for ${friendName}!`, 'success');
+                    } else {
+                        alert(data.message || 'Failed to schedule call');
+                    }
+                } catch (error) {
+                    console.error('Connection call error:', error);
+                    alert('Failed to schedule call');
+                }
+            } else if (recipientType === 'linked') {
+                // Delegated call to linked family (no app)
+                try {
+                    const familyMember = familyMembers.find(m => m.id === recipientId);
+                    
+                    const response = await fetch(`${API_BASE}/api/delegated-calls/${currentUser.id}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accessToken}`
+                        },
+                        body: JSON.stringify({
+                            linked_user_id: recipientId,
+                            scheduled_at: scheduledAt.toISOString(),
+                            topic_id: topicId || null,
+                            custom_message: topic ? `${topic.emoji} ${topic.title}` : 'Check-in call from Synki 💕'
+                        })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        closeScheduleModal();
+                        
+                        const memberName = familyMember?.name || 'family member';
+                        const topicName = topic?.title || 'check-in';
+                        addMessage('system', `👨‍👩‍👧 Synki will call ${memberName} in ${minutes} minute${minutes > 1 ? 's' : ''} for ${topicName}! 💕`);
+                    } else {
+                        alert('Failed to schedule family call');
+                    }
+                } catch (error) {
+                    console.error('Delegated call error:', error);
+                    alert('Failed to schedule family call');
+                }
+            }
+        }
+
+        function updateScheduleCountdown() {
+            if (!scheduledCallTime) return;
+            
+            const remaining = scheduledCallTime - Date.now();
+            
+            if (remaining <= 0) {
+                document.getElementById('scheduledCountdown').textContent = '00:00';
+                return;
+            }
+            
+            const mins = Math.floor(remaining / 60000);
+            const secs = Math.floor((remaining % 60000) / 1000);
+            document.getElementById('scheduledCountdown').textContent = 
+                `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        async function cancelScheduledCall() {
+            if (scheduledCallTimeout) clearTimeout(scheduledCallTimeout);
+            if (scheduledCallInterval) clearInterval(scheduledCallInterval);
+            
+            // Cancel on server
+            if (scheduledCallId && currentUser) {
+                try {
+                    await fetch(`${API_BASE}/api/schedule/${currentUser.id}/${scheduledCallId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                } catch (e) { console.error('Cancel error:', e); }
+            }
+            
+            scheduledCallTime = null;
+            scheduledCallId = null;
+            localStorage.removeItem('scheduledCallTime');
+            localStorage.removeItem('scheduledCallId');
+            
+            document.getElementById('scheduledIndicator').style.display = 'none';
+            document.getElementById('scheduleCallBtn').style.display = 'inline-flex';
+            
+            addMessage('system', '❌ Scheduled call cancelled');
+        }
+
+        function triggerScheduledCall() {
+            if (scheduledCallInterval) clearInterval(scheduledCallInterval);
+            
+            scheduledCallTime = null;
+            scheduledCallId = null;
+            localStorage.removeItem('scheduledCallTime');
+            localStorage.removeItem('scheduledCallId');
+            
+            document.getElementById('scheduledIndicator').style.display = 'none';
+            document.getElementById('scheduleCallBtn').style.display = 'inline-flex';
+            
+            // Show browser notification if permitted
+            if (Notification.permission === 'granted') {
+                new Notification('Synki is calling! 💕', {
+                    body: 'Your scheduled call is ready!',
+                    icon: '/frontend/favicon.ico'
+                });
+            }
+            
+            console.log('📞 Scheduled call triggered!');
+        }
+        
+        // ===== FAMILY MEMBERS MANAGEMENT =====
+        
+        function openFamilyModal() {
+            closeScheduleModal();
+            document.getElementById('familyModal').classList.remove('hidden');
+            document.getElementById('addFamilyForm').style.display = 'none';
+            renderFamilyList();
+        }
+        
+        function closeFamilyModal() {
+            document.getElementById('familyModal').classList.add('hidden');
+        }
+        
+        function renderFamilyList() {
+            const list = document.getElementById('familyList');
+            
+            if (familyMembers.length === 0) {
+                list.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                        <span style="font-size: 2rem;">👨‍👩‍👧</span>
+                        <p>No family members yet</p>
+                        <p style="font-size: 0.85rem;">Add someone for Synki to check on!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            list.innerHTML = familyMembers.map(member => `
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface); border-radius: 12px; margin-bottom: 10px;">
+                    <span style="font-size: 1.8rem;">${member.avatar_emoji || '👤'}</span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: var(--text-primary);">${member.name}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">${member.relationship} • ${member.speaking_pace || 'normal'} pace</div>
+                        ${member.phone ? `<div style="font-size: 0.75rem; color: var(--text-muted);">📞 ${member.phone}</div>` : ''}
+                    </div>
+                    <button onclick="deleteFamilyMember('${member.id}')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 5px;">🗑️</button>
+                </div>
+            `).join('');
+        }
+        
+        function showAddFamilyForm() {
+            document.getElementById('addFamilyForm').style.display = 'block';
+            document.getElementById('familyName').value = '';
+            document.getElementById('familyPhone').value = '';
+            document.getElementById('familyNotes').value = '';
+        }
+        
+        async function saveFamilyMember() {
+            const name = document.getElementById('familyName').value.trim();
+            const relationship = document.getElementById('familyRelation').value;
+            const phone = document.getElementById('familyPhone').value.trim();
+            const speakingPace = document.getElementById('familySpeakingPace').value;
+            const notes = document.getElementById('familyNotes').value.trim();
+            
+            if (!name) {
+                alert('Please enter a name');
+                return;
+            }
+            
+            // Get emoji based on relationship
+            const emojiMap = {
+                'mom': '👩',
+                'dad': '👨',
+                'grandma': '👵',
+                'grandpa': '👴',
+                'friend': '🧑',
+                'other': '👤'
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/linked-users/${currentUser.id}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({
+                        name,
+                        relationship,
+                        phone: phone || null,
+                        avatar_emoji: emojiMap[relationship] || '👤',
+                        speaking_pace: speakingPace,
+                        notes: notes || null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Reload family members
+                    await loadFamilyMembers();
+                    renderFamilyList();
+                    document.getElementById('addFamilyForm').style.display = 'none';
+                    addMessage('system', `👨‍👩‍👧 Added ${name} to your family! Synki can now call them.`);
+                } else {
+                    alert('Failed to add family member');
+                }
+            } catch (e) {
+                console.error('Failed to save family member:', e);
+                alert('Failed to add family member');
+            }
+        }
+        
+        async function deleteFamilyMember(id) {
+            if (!confirm('Remove this family member?')) return;
+            
+            try {
+                await fetch(`${API_BASE}/api/linked-users/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                // Reload
+                await loadFamilyMembers();
+                renderFamilyList();
+            } catch (e) {
+                console.error('Failed to delete:', e);
+            }
+        }
+
+        // ===== SYNKI CONNECTIONS (Social) =====
+        
+        let mySynkiCode = null;
+        let myConnections = [];
+        let pendingRequests = [];
+        let sentRequests = [];
+        let connectionsPresence = {};  // Map of user_id -> presence data
+        let currentConnectionTab = 'my-code';
+        let presenceInterval = null;
+        
+        async function openConnectionsModal() {
+            document.getElementById('connectionsModal').classList.remove('hidden');
+            // Reset to first tab
+            switchConnectionTab('my-code');
+            
+            // Load data with loading states
+            const codeEl = document.getElementById('mySynkiCode');
+            codeEl.classList.add('loading');
+            codeEl.textContent = '------';
+            
+            await Promise.all([
+                loadMySynkiCode(),
+                loadConnections(),
+                loadConnectionsPresence()
+            ]);
+        }
+        
+        function closeConnectionsModal() {
+            document.getElementById('connectionsModal').classList.add('hidden');
+            document.getElementById('searchResult').style.display = 'none';
+            document.getElementById('connectCode').value = '';
+            document.getElementById('searchPlaceholder').style.display = 'block';
+        }
+        
+        function switchConnectionTab(tabId) {
+            currentConnectionTab = tabId;
+            
+            // Update tab buttons
+            document.querySelectorAll('.modal-tab').forEach(tab => tab.classList.remove('active'));
+            document.getElementById(`tab${tabId.charAt(0).toUpperCase() + tabId.slice(1).replace(/-([a-z])/g, g => g[1].toUpperCase())}`).classList.add('active');
+            
+            // Update panels
+            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+            const panelId = `panel${tabId.charAt(0).toUpperCase() + tabId.slice(1).replace(/-([a-z])/g, g => g[1].toUpperCase())}`;
+            document.getElementById(panelId).classList.add('active');
+            
+            // Load data for specific tabs
+            if (tabId === 'scheduled') {
+                loadScheduledCalls();
+            }
+        }
+        
+        async function loadScheduledCalls() {
+            const container = document.getElementById('scheduledCallsList');
+            container.innerHTML = '<div class="loading-state">Loading...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/schedule/my-scheduled`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                
+                const forMe = data.for_me || [];
+                const byMe = data.by_me || [];
+                const total = forMe.length + byMe.length;
+                
+                // Update badge
+                const badge = document.getElementById('scheduledBadge');
+                if (total > 0) {
+                    badge.textContent = total;
+                    badge.style.display = 'inline-flex';
+                } else {
+                    badge.style.display = 'none';
+                }
+                
+                if (total === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⏰</div>
+                            <div class="empty-state-title">No scheduled calls</div>
+                            <div class="empty-state-text">Schedule calls from the main screen or from a friend's profile</div>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                let html = '';
+                
+                // Calls scheduled FOR ME (someone else scheduled)
+                if (forMe.length > 0) {
+                    html += `<div class="scheduled-section">
+                        <div class="scheduled-section-title">📥 Calls Coming to Me</div>`;
+                    
+                    forMe.forEach(call => {
+                        const time = new Date(call.scheduled_at);
+                        const timeStr = time.toLocaleString('en-IN', { 
+                            weekday: 'short',
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            day: 'numeric',
+                            month: 'short'
+                        });
+                        const metadata = call.metadata || {};
+                        const scheduledBy = metadata.scheduled_by_name || 'Someone';
+                        const topicTitle = metadata.topic_title || 'General check-in';
+                        const topicEmoji = metadata.topic_emoji || '💬';
+                        
+                        html += `
+                            <div class="scheduled-call-card">
+                                <div class="scheduled-call-info">
+                                    <div class="scheduled-call-topic">${topicEmoji} ${topicTitle}</div>
+                                    <div class="scheduled-call-by">Scheduled by ${scheduledBy}</div>
+                                    <div class="scheduled-call-time">⏰ ${timeStr}</div>
+                                </div>
+                                <button class="scheduled-call-cancel" onclick="cancelScheduledCall('${call.id}')">✕</button>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+                
+                // Calls scheduled BY ME (for others)
+                if (byMe.length > 0) {
+                    html += `<div class="scheduled-section" style="margin-top: 20px;">
+                        <div class="scheduled-section-title">📤 Calls I've Scheduled</div>`;
+                    
+                    byMe.forEach(call => {
+                        const time = new Date(call.scheduled_at);
+                        const timeStr = time.toLocaleString('en-IN', { 
+                            weekday: 'short',
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            day: 'numeric',
+                            month: 'short'
+                        });
+                        const metadata = call.metadata || {};
+                        const topicTitle = metadata.topic_title || 'General check-in';
+                        const topicEmoji = metadata.topic_emoji || '💬';
+                        const targetName = call.target_name || 'Friend';
+                        
+                        html += `
+                            <div class="scheduled-call-card scheduled-by-me">
+                                <div class="scheduled-call-info">
+                                    <div class="scheduled-call-topic">${topicEmoji} ${topicTitle}</div>
+                                    <div class="scheduled-call-by">For ${targetName}</div>
+                                    <div class="scheduled-call-time">⏰ ${timeStr}</div>
+                                </div>
+                                <button class="scheduled-call-cancel" onclick="cancelScheduledCallForOther('${call.id}')">✕</button>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+                
+                container.innerHTML = html;
+                
+            } catch (e) {
+                console.error('Failed to load scheduled calls:', e);
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">❌</div>
+                        <div class="empty-state-title">Failed to load</div>
+                        <div class="empty-state-text">Please try again</div>
+                    </div>
+                `;
+            }
+        }
+        
+        async function cancelScheduledCallForOther(callId) {
+            if (!confirm('Cancel this scheduled call?')) return;
+            
+            try {
+                // We need a new API endpoint for this
+                const response = await fetch(`${API_BASE}/api/schedule/cancel/${callId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                if (response.ok) {
+                    loadScheduledCalls();
+                } else {
+                    alert('Failed to cancel call');
+                }
+            } catch (e) {
+                console.error('Failed to cancel:', e);
+                alert('Failed to cancel call');
+            }
+        }
+        
+        async function loadMySynkiCode() {
+            const codeEl = document.getElementById('mySynkiCode');
+            try {
+                const response = await fetch(`${API_BASE}/api/connections/my-code`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                mySynkiCode = data.code;
+                codeEl.textContent = mySynkiCode || '------';
+                codeEl.classList.remove('loading');
+            } catch (e) {
+                console.error('Failed to load code:', e);
+                codeEl.textContent = 'ERROR';
+                codeEl.classList.remove('loading');
+            }
+        }
+        
+        function copyMyCode() {
+            const btn = document.getElementById('copyCodeBtn');
+            if (mySynkiCode) {
+                navigator.clipboard.writeText(mySynkiCode).then(() => {
+                    btn.innerHTML = '<span>✓</span> Copied!';
+                    btn.classList.add('copied');
+                    setTimeout(() => {
+                        btn.innerHTML = '<span>📋</span> Copy Code';
+                        btn.classList.remove('copied');
+                    }, 2000);
+                });
+            }
+        }
+        
+        async function loadConnections() {
+            try {
+                const response = await fetch(`${API_BASE}/api/connections`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                
+                myConnections = data.connections || [];
+                pendingRequests = data.pending_requests || [];
+                sentRequests = data.sent_requests || [];
+                
+                renderConnections();
+                renderPendingRequests();
+                updateRequestsBadge();
+            } catch (e) {
+                console.error('Failed to load connections:', e);
+            }
+        }
+        
+        function updateRequestsBadge() {
+            const modalBadge = document.getElementById('requestsBadge');
+            const headerBadge = document.getElementById('headerRequestsBadge');
+            const count = pendingRequests.length;
+            
+            // Update modal badge
+            if (count > 0) {
+                modalBadge.textContent = count;
+                modalBadge.style.display = 'flex';
+            } else {
+                modalBadge.style.display = 'none';
+            }
+            
+            // Update header badge
+            if (headerBadge) {
+                if (count > 0) {
+                    headerBadge.textContent = count;
+                    headerBadge.style.display = 'flex';
+                } else {
+                    headerBadge.style.display = 'none';
+                }
+            }
+        }
+        
+        function renderConnections() {
+            const list = document.getElementById('connectionsList');
+            
+            if (myConnections.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">💕</div>
+                        <div class="empty-state-title">No connections yet</div>
+                        <div class="empty-state-text">Share your Synki code or search for friends to connect!</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const getRelationEmoji = (rel) => {
+                const emojis = { family: '👨‍👩‍👧', friend: '🧑', caregiver: '💝', parent: '👴', child: '👶' };
+                return emojis[rel] || '👤';
+            };
+            
+            const getStatusText = (status) => {
+                const texts = {
+                    'online': 'Online',
+                    'in_call': 'In Call 📞',
+                    'away': 'Away',
+                    'busy': 'Busy'
+                };
+                return texts[status] || '';
+            };
+            
+            list.innerHTML = `
+                <div class="section-header">
+                    <span class="section-title">💕 Your Connections</span>
+                    <span class="section-count">${myConnections.length}</span>
+                </div>
+                ${myConnections.map(conn => {
+                    const presence = connectionsPresence[conn.other_user_id] || {};
+                    const isOnline = presence.is_online || false;
+                    const status = presence.status || 'offline';
+                    const statusText = isOnline ? getStatusText(status) : '';
+                    
+                    return `
+                    <div class="connection-card" data-user-id="${conn.other_user_id}">
+                        <div class="connection-avatar">
+                            ${(conn.other_user_name || 'U')[0].toUpperCase()}
+                            <span class="status-indicator ${status}"></span>
+                        </div>
+                        <div class="connection-info">
+                            <div class="connection-name">
+                                ${conn.nickname || conn.other_user_name}
+                                ${statusText ? `<span class="connection-status-text ${status}">${statusText}</span>` : ''}
+                            </div>
+                            <div class="connection-details">
+                                <span class="connection-badge">${getRelationEmoji(conn.relationship)} ${conn.relationship}</span>
+                                <span style="opacity: 0.5;">•</span>
+                                <span style="font-family: 'Space Grotesk', monospace; letter-spacing: 1px;">${conn.other_user_code || ''}</span>
+                            </div>
+                        </div>
+                        <div class="connection-actions">
+                            <button class="connection-btn connection-btn-call" onclick="openScheduleCallModal('${conn.connection_id}', '${conn.other_user_id}', '${conn.other_user_name}')">
+                                📞 Call
+                            </button>
+                        </div>
+                    </div>
+                `}).join('')}
+            `;
+        }
+        
+        function renderPendingRequests() {
+            const list = document.getElementById('pendingRequestsList');
+            const sentList = document.getElementById('sentRequestsList');
+            
+            // Incoming requests
+            if (pendingRequests.length === 0) {
+                list.innerHTML = `
+                    <div class="section-header">
+                        <span class="section-title">📬 Incoming Requests</span>
+                    </div>
+                    <div class="empty-state" style="padding: 30px 20px;">
+                        <div class="empty-state-icon">📭</div>
+                        <div class="empty-state-title">No pending requests</div>
+                        <div class="empty-state-text">When someone sends you a connection request, it will appear here</div>
+                    </div>
+                `;
+            } else {
+                list.innerHTML = `
+                    <div class="section-header">
+                        <span class="section-title">📬 Incoming Requests</span>
+                        <span class="section-count">${pendingRequests.length}</span>
+                    </div>
+                    ${pendingRequests.map(req => `
+                        <div class="connection-card pending-card">
+                            <div class="connection-avatar">
+                                ${(req.other_user_name || 'U')[0].toUpperCase()}
+                            </div>
+                            <div class="connection-info">
+                                <div class="connection-name">${req.other_user_name}</div>
+                                <div class="pending-message">wants to connect as <strong>${req.relationship}</strong></div>
+                            </div>
+                            <div class="connection-actions">
+                                <button class="connection-btn connection-btn-accept" onclick="respondToRequest('${req.connection_id}', true)">
+                                    ✓ Accept
+                                </button>
+                                <button class="connection-btn connection-btn-reject" onclick="respondToRequest('${req.connection_id}', false)">
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                `;
+            }
+            
+            // Sent requests
+            if (sentRequests.length > 0) {
+                sentList.innerHTML = `
+                    <div class="section-header">
+                        <span class="section-title">📤 Sent Requests</span>
+                        <span class="section-count">${sentRequests.length}</span>
+                    </div>
+                    ${sentRequests.map(req => `
+                        <div class="connection-card" style="opacity: 0.7;">
+                            <div class="connection-avatar" style="background: var(--surface);">
+                                ${(req.other_user_name || 'U')[0].toUpperCase()}
+                            </div>
+                            <div class="connection-info">
+                                <div class="connection-name">${req.other_user_name}</div>
+                                <div class="connection-details">
+                                    <span style="color: var(--warning);">⏳ Pending...</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                `;
+            } else {
+                sentList.innerHTML = '';
+            }
+        }
+        
+        function handleSearchKeyup(event) {
+            if (event.key === 'Enter') {
+                searchUserByCode();
+            }
+            // Auto-uppercase
+            event.target.value = event.target.value.toUpperCase();
+        }
+        
+        async function searchUserByCode() {
+            const code = document.getElementById('connectCode').value.trim().toUpperCase();
+            const resultDiv = document.getElementById('searchResult');
+            const placeholder = document.getElementById('searchPlaceholder');
+            const searchBtn = document.getElementById('searchBtn');
+            
+            console.log('Searching for code:', code);
+            
+            if (code.length < 4) {
+                resultDiv.innerHTML = `
+                    <div class="search-not-found">
+                        <div class="search-not-found-icon">🔤</div>
+                        <p>Enter at least 4 characters</p>
+                    </div>
+                `;
+                resultDiv.style.display = 'block';
+                placeholder.style.display = 'none';
+                return;
+            }
+            
+            // Show loading state
+            searchBtn.classList.add('loading');
+            searchBtn.innerHTML = '';
+            resultDiv.style.display = 'none';
+            placeholder.style.display = 'none';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/connections/find/${code}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                console.log('Search response:', response.status, data);
+                
+                if (data.found) {
+                    resultDiv.innerHTML = `
+                        <div class="user-found-card">
+                            <div class="user-found-header">
+                                <div class="user-found-avatar">
+                                    ${(data.user.name || 'U')[0].toUpperCase()}
+                                </div>
+                                <div class="user-found-info">
+                                    <div class="user-found-name">${data.user.name}</div>
+                                    <div class="user-found-code">${data.user.code}</div>
+                                </div>
+                            </div>
+                            <div class="connect-form">
+                                <select id="connectRelation" class="connect-relation-select">
+                                    <option value="family">👨‍👩‍👧 Family</option>
+                                    <option value="friend">🧑 Friend</option>
+                                    <option value="caregiver">💝 Caregiver</option>
+                                </select>
+                                <button class="send-request-btn" onclick="sendConnectionRequest('${data.user.id}', '${code}')" id="sendRequestBtn">
+                                    <span>🤝</span> Send Request
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="search-not-found">
+                            <div class="search-not-found-icon">😕</div>
+                            <p>${data.message || 'No user found with this code'}</p>
+                        </div>
+                    `;
+                }
+                resultDiv.style.display = 'block';
+            } catch (e) {
+                console.error('Search failed:', e);
+                resultDiv.innerHTML = `
+                    <div class="search-error">
+                        ❌ Search failed. Please try again.
+                    </div>
+                `;
+                resultDiv.style.display = 'block';
+            } finally {
+                searchBtn.classList.remove('loading');
+                searchBtn.innerHTML = '🔍';
+            }
+        }
+        
+        async function sendConnectionRequest(userId, code) {
+            const relationship = document.getElementById('connectRelation').value;
+            const btn = document.getElementById('sendRequestBtn');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Sending...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/connections/request`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({
+                        code: code,
+                        relationship: relationship
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show success
+                    btn.innerHTML = '<span>✓</span> Sent!';
+                    btn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
+                    
+                    // Update UI after delay
+                    setTimeout(async () => {
+                        document.getElementById('searchResult').style.display = 'none';
+                        document.getElementById('searchPlaceholder').style.display = 'block';
+                        document.getElementById('connectCode').value = '';
+                        await loadConnections();
+                        
+                        // Show and switch to requests tab
+                        switchConnectionTab('requests');
+                    }, 1500);
+                } else {
+                    btn.innerHTML = `<span>❌</span> ${data.message || 'Failed'}`;
+                    btn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.innerHTML = '<span>🤝</span> Send Request';
+                        btn.style.background = '';
+                    }, 2000);
+                }
+            } catch (e) {
+                console.error('Failed to send request:', e);
+                btn.innerHTML = '<span>❌</span> Error';
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<span>🤝</span> Send Request';
+                    btn.style.background = '';
+                }, 2000);
+            }
+        }
+        
+        async function respondToRequest(connectionId, accept) {
+            // Find and update the button visually
+            const card = event.target.closest('.connection-card');
+            if (card) {
+                card.style.opacity = '0.5';
+                card.style.pointerEvents = 'none';
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/connections/${connectionId}/respond`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ accept })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show toast notification
+                    showToast(accept ? '🎉 Connected!' : 'Request declined', accept ? 'success' : 'info');
+                    await loadConnections();
+                    
+                    if (accept) {
+                        // Switch to connected tab
+                        setTimeout(() => switchConnectionTab('connected'), 500);
+                    }
+                } else {
+                    showToast(data.message || 'Failed', 'error');
+                    if (card) {
+                        card.style.opacity = '1';
+                        card.style.pointerEvents = 'auto';
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to respond:', e);
+                showToast('Failed to respond', 'error');
+                if (card) {
+                    card.style.opacity = '1';
+                    card.style.pointerEvents = 'auto';
+                }
+            }
+        }
+        
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = 'toast-notification';
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 30px;
+                left: 50%;
+                transform: translateX(-50%);
+                padding: 14px 24px;
+                background: ${type === 'success' ? 'linear-gradient(135deg, #22c55e, #16a34a)' : 
+                             type === 'error' ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 
+                             'var(--surface)'};
+                color: white;
+                border-radius: 14px;
+                font-weight: 500;
+                z-index: 10000;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                animation: toastIn 0.3s ease;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'toastOut 0.3s ease forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+        
+        // ===== PRESENCE / ONLINE STATUS =====
+        
+        async function loadConnectionsPresence() {
+            try {
+                const response = await fetch(`${API_BASE}/api/presence/connections`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                
+                // Build presence map
+                connectionsPresence = {};
+                if (data.presence) {
+                    data.presence.forEach(p => {
+                        connectionsPresence[p.user_id] = p;
+                    });
+                }
+                
+                // Re-render connections if panel is visible
+                if (currentConnectionTab === 'connected') {
+                    renderConnections();
+                }
+            } catch (e) {
+                console.log('Failed to load presence:', e);
+            }
+        }
+        
+        async function updateMyPresence(status, activity = null) {
+            try {
+                await fetch(`${API_BASE}/api/presence/update`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ status, activity })
+                });
+            } catch (e) {
+                console.log('Failed to update presence:', e);
+            }
+        }
+        
+        function startPresenceTracking() {
+            // Update presence immediately
+            updateMyPresence('online', 'browsing');
+            
+            // Update presence every minute
+            if (presenceInterval) clearInterval(presenceInterval);
+            presenceInterval = setInterval(() => {
+                updateMyPresence('online', room ? 'talking_to_synki' : 'browsing');
+            }, 60000);
+            
+            // Update presence on visibility change
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    updateMyPresence('away');
+                } else {
+                    updateMyPresence('online', room ? 'talking_to_synki' : 'browsing');
+                }
+            });
+            
+            // Update presence before leaving page
+            window.addEventListener('beforeunload', () => {
+                // Use sendBeacon for reliable delivery
+                const data = JSON.stringify({ status: 'offline', activity: null });
+                navigator.sendBeacon(`${API_BASE}/api/presence/update`, new Blob([data], { type: 'application/json' }));
+            });
+        }
+        
+        // ===== SCHEDULE CALL FOR CONNECTIONS =====
+        
+        let scheduleConnectionId = null;
+        let scheduleTargetUserId = null;
+        let scheduleTargetUserName = null;
+        
+        async function openScheduleCallModal(connectionId, userId, userName) {
+            scheduleConnectionId = connectionId;
+            scheduleTargetUserId = userId;
+            scheduleTargetUserName = userName;
+            
+            // Load topics if not already loaded
+            if (!callTopics || callTopics.length === 0) {
+                await loadCallTopics();
+            }
+            
+            // Create modal if doesn't exist, otherwise show it
+            let modal = document.getElementById('connectionScheduleModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'connectionScheduleModal';
+                modal.className = 'modal-overlay';
+                modal.innerHTML = `
+                    <div class="modal-content" style="max-width: 400px;">
+                        <div class="modal-header">
+                            <span>📞</span>
+                            <h2>Schedule Call</h2>
+                            <button class="modal-close" onclick="closeConnectionScheduleModal()">✕</button>
+                        </div>
+                        <div class="modal-body">
+                            <div style="text-align: center; margin-bottom: 20px;">
+                                <div style="width: 70px; height: 70px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--secondary)); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.8rem; font-weight: 600; margin: 0 auto 12px;">
+                                    <span id="scheduleTargetInitial">U</span>
+                                </div>
+                                <div style="font-size: 1.2rem; font-weight: 600;" id="scheduleTargetName">User</div>
+                                <div style="color: var(--text-secondary); font-size: 0.85rem;">Synki will call them at the scheduled time</div>
+                            </div>
+                            
+                            <label class="search-label">When should Synki call?</label>
+                            <div class="quick-options" style="margin-bottom: 16px;">
+                                <button class="quick-btn" onclick="selectConnectionQuickTime(1)">1 min</button>
+                                <button class="quick-btn" onclick="selectConnectionQuickTime(5)">5 min</button>
+                                <button class="quick-btn" onclick="selectConnectionQuickTime(15)">15 min</button>
+                                <button class="quick-btn" onclick="selectConnectionQuickTime(30)">30 min</button>
+                                <button class="quick-btn" onclick="selectConnectionQuickTime(60)">1 hr</button>
+                            </div>
+                            
+                            <label class="search-label">Custom time (minutes):</label>
+                            <input type="number" class="time-input" id="connectionCallMinutes" min="1" max="1440" value="10" style="margin-bottom: 16px;">
+                            
+                            <label class="search-label">What should Synki ask about?</label>
+                            <select class="time-input" id="connectionCallTopic" style="margin-bottom: 16px;" onchange="toggleCustomQuestion()">
+                                <option value="">💕 General Check-in</option>
+                                <option value="custom">✏️ Custom Question</option>
+                            </select>
+                            
+                            <div id="customQuestionSection" style="display: none;">
+                                <label class="search-label">What should Synki ask?</label>
+                                <input type="text" class="time-input" id="connectionCallCustomQuestion" placeholder="e.g. Did you take your medicine today?" style="margin-bottom: 16px;">
+                            </div>
+                            
+                            <button class="modal-confirm" onclick="confirmConnectionCall()" id="confirmConnectionCallBtn">
+                                📞 Schedule Call
+                            </button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+            
+            // Update modal content
+            document.getElementById('scheduleTargetInitial').textContent = (userName || 'U')[0].toUpperCase();
+            document.getElementById('scheduleTargetName').textContent = userName;
+            
+            // Load topics into dropdown
+            const topicSelect = document.getElementById('connectionCallTopic');
+            topicSelect.innerHTML = '<option value="">💕 General Check-in</option><option value="custom">✏️ Custom Question</option>';
+            if (callTopics && callTopics.length > 0) {
+                callTopics.forEach(topic => {
+                    const emoji = topic.emoji || '💬';
+                    topicSelect.innerHTML += `<option value="${topic.id}" data-prompts='${JSON.stringify(topic.prompts || [])}'>${emoji} ${topic.title}</option>`;
+                });
+            }
+            
+            // Reset custom question section
+            const customSection = document.getElementById('customQuestionSection');
+            if (customSection) customSection.style.display = 'none';
+            
+            // Show modal
+            modal.classList.remove('hidden');
+        }
+        
+        function closeConnectionScheduleModal() {
+            const modal = document.getElementById('connectionScheduleModal');
+            if (modal) modal.classList.add('hidden');
+            scheduleConnectionId = null;
+            scheduleTargetUserId = null;
+            scheduleTargetUserName = null;
+        }
+        
+        function selectConnectionQuickTime(minutes) {
+            document.getElementById('connectionCallMinutes').value = minutes;
+            // Highlight selected button
+            document.querySelectorAll('#connectionScheduleModal .quick-btn').forEach(btn => btn.classList.remove('selected'));
+            event.target.classList.add('selected');
+        }
+        
+        function toggleCustomQuestion() {
+            const select = document.getElementById('connectionCallTopic');
+            const customSection = document.getElementById('customQuestionSection');
+            if (select.value === 'custom') {
+                customSection.style.display = 'block';
+            } else {
+                customSection.style.display = 'none';
+            }
+        }
+        
+        async function confirmConnectionCall() {
+            if (!scheduleConnectionId) return;
+            
+            const minutes = parseInt(document.getElementById('connectionCallMinutes').value) || 10;
+            const topicSelect = document.getElementById('connectionCallTopic');
+            const topicValue = topicSelect.value;
+            
+            // Get topic prompts
+            let topicPrompts = [];
+            let topicTitle = 'check-in';
+            
+            if (topicValue === 'custom') {
+                // Custom question entered by user
+                const customQuestion = document.getElementById('connectionCallCustomQuestion').value.trim();
+                if (customQuestion) {
+                    topicPrompts = [customQuestion];
+                    topicTitle = 'Custom Question';
+                }
+            } else if (topicValue) {
+                // Preset topic selected
+                const selectedOption = topicSelect.options[topicSelect.selectedIndex];
+                try {
+                    topicPrompts = JSON.parse(selectedOption.dataset.prompts || '[]');
+                    topicTitle = selectedOption.textContent;
+                } catch (e) {
+                    console.error('Failed to parse topic prompts:', e);
+                }
+            }
+            
+            // Calculate scheduled time
+            const scheduledAt = new Date(Date.now() + minutes * 60000).toISOString();
+            
+            const btn = document.getElementById('confirmConnectionCallBtn');
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Scheduling...';
+            
+            console.log('📋 Scheduling call with:', { topicTitle, topicPrompts });
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/connections/${scheduleConnectionId}/schedule-call`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({
+                        scheduled_at: scheduledAt,
+                        message: topicTitle !== 'check-in' ? `📋 ${topicTitle}` : `Hey ${scheduleTargetUserName}! Synki is calling 💕`,
+                        topic_id: topicValue && topicValue !== 'custom' ? topicValue : null,
+                        topic_prompts: topicPrompts
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    btn.innerHTML = '✓ Scheduled!';
+                    btn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
+                    
+                    showToast(`📞 Call scheduled for ${scheduleTargetUserName} in ${minutes} min!`, 'success');
+                    
+                    setTimeout(() => {
+                        closeConnectionScheduleModal();
+                        closeConnectionsModal();
+                        btn.disabled = false;
+                        btn.innerHTML = '📞 Schedule Call';
+                        btn.style.background = '';
+                    }, 1500);
+                } else {
+                    throw new Error(data.message || 'Failed to schedule');
+                }
+            } catch (e) {
+                console.error('Failed to schedule call:', e);
+                btn.innerHTML = '❌ Failed';
+                btn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                showToast(e.message || 'Failed to schedule call', 'error');
+                
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '📞 Schedule Call';
+                    btn.style.background = '';
+                }, 2000);
+            }
+        }
+        
+        // Keep original function for backward compatibility
+        async function scheduleCallFor(userId, userName) {
+            // Find connection ID for this user
+            const conn = myConnections.find(c => c.other_user_id === userId);
+            if (conn) {
+                openScheduleCallModal(conn.connection_id, userId, userName);
+            } else {
+                closeConnectionsModal();
+                openScheduleModal();
+                showToast(`📞 Scheduling call with ${userName}`, 'info');
+            }
+        }
+
+        function checkExistingSchedule() {
+            const storedTime = localStorage.getItem('scheduledCallTime');
+            const storedId = localStorage.getItem('scheduledCallId');
+            
+            if (storedTime) {
+                const time = parseInt(storedTime);
+                if (time > Date.now()) {
+                    scheduledCallTime = time;
+                    scheduledCallId = storedId;
+                    
+                    document.getElementById('scheduledIndicator').style.display = 'flex';
+                    document.getElementById('scheduleCallBtn').style.display = 'none';
+                    
+                    updateScheduleCountdown();
+                    scheduledCallInterval = setInterval(updateScheduleCountdown, 1000);
+                    scheduledCallTimeout = setTimeout(triggerScheduledCall, (time - Date.now()) + 30000);
+                } else {
+                    localStorage.removeItem('scheduledCallTime');
+                    localStorage.removeItem('scheduledCallId');
+                }
+            }
+        }
+
+        // ===== CALL HISTORY FUNCTIONS =====
+        async function openCallHistory() {
+            document.getElementById('callHistoryModal').classList.remove('hidden');
+            await loadCallHistory();
+        }
+
+        function closeCallHistory() {
+            document.getElementById('callHistoryModal').classList.add('hidden');
+        }
+
+        async function loadCallHistory() {
+            if (!currentUser) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/sessions/${currentUser.id}?limit=20`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                
+                const list = document.getElementById('callHistoryList');
+                
+                if (!data.sessions || data.sessions.length === 0) {
+                    list.innerHTML = `
+                        <div class="call-history-empty">
+                            <span style="font-size: 2rem;">📞</span>
+                            <p>No calls yet. Start a conversation!</p>
+                        </div>`;
+                    return;
+                }
+                
+                list.innerHTML = data.sessions.map(s => {
+                    const date = new Date(s.started_at);
+                    const timeAgo = formatTimeAgo(date);
+                    const duration = formatDuration(s.duration_seconds);
+                    const turns = s.turn_count || 0;
+                    
+                    return `
+                        <div class="call-history-item">
+                            <div class="call-item-icon">📞</div>
+                            <div class="call-item-details">
+                                <div class="call-item-name">Synki 💕 ${turns > 0 ? `<span style="font-size:0.7rem;background:rgba(255,107,157,0.2);padding:2px 6px;border-radius:10px;">${turns} msgs</span>` : ''}</div>
+                                <div class="call-item-time">${timeAgo}</div>
+                            </div>
+                            <div class="call-item-duration">${duration}</div>
+                        </div>`;
+                }).join('');
+            } catch (error) {
+                console.error('Failed to load call history:', error);
+            }
+        }
+
+        function formatTimeAgo(date) {
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / (1000 * 60));
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins} min ago`;
+            if (diffHours < 24) return `${diffHours} hr ago`;
+            if (diffDays === 1) return 'Yesterday';
+            if (diffDays < 7) return `${diffDays} days ago`;
+            
+            return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // ===== SERVICE WORKER MESSAGE HANDLER =====
+        // Handle messages from service worker (e.g., when user clicks Accept on notification)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                console.log('📬 Message from service worker:', event.data);
+                
+                if (event.data.type === 'ACCEPT_CALL') {
+                    // Auto-connect when user accepts call from notification
+                    if (!room && connectBtn && !connectBtn.disabled) {
+                        console.log('📞 Auto-connecting from notification accept...');
+                        connectBtn.click();
+                    }
+                }
+            });
+        }
+        
+        // Check URL parameters for auto-actions (when opened from notification)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('action') === 'accept') {
+            // Auto-connect after page loads and user is logged in
+            setTimeout(() => {
+                if (currentUser && !room && connectBtn && !connectBtn.disabled) {
+                    console.log('📞 Auto-connecting from notification URL...');
+                    connectBtn.click();
+                }
+            }, 2000);
+        }
+
+        // Check for existing schedule on page load
+        setTimeout(checkExistingSchedule, 1000);
 
         init();
     </script>

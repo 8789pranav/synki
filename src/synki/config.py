@@ -44,8 +44,8 @@ class OpenAISettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OPENAI_")
     
     api_key: str = Field(default="", description="OpenAI API key")
-    model: str = Field(default="gpt-4.1-mini", description="OpenAI model name")
-    max_tokens: int = Field(default=150, description="Max response tokens")
+    model: str = Field(default="gpt-4o-mini", description="OpenAI model name")
+    max_tokens: int = Field(default=100, description="Max response tokens")
     temperature: float = Field(default=0.8, description="Response creativity")
     stream: bool = Field(default=True, description="Enable streaming responses")
 
