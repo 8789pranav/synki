@@ -182,21 +182,18 @@ CARTESIA_API_KEY=your_cartesia_key
 
 ```bash
 # Development mode (with auto-reload)
-uv run python agent.py dev
+uv run python -m synki.agent dev
 
 # Production mode
-uv run python agent.py start
-
-# Console mode (local testing without LiveKit)
-uv run python agent.py console
+uv run python -m synki.agent start
 ```
 
 ### Testing with Frontend
 
-1. Start the agent: `uv run python agent.py dev`
-2. Open `frontend/index.html` in a browser
-3. Click "Connect" and allow microphone access
-4. Start talking to Synki!
+1. Start the API server: `uv run python api_server.py`
+2. Start the agent: `uv run python -m synki.agent dev`
+3. Open `http://localhost:8000` in a browser
+4. Login and click "Connect" to talk to Synki!
 
 ---
 
@@ -204,13 +201,13 @@ uv run python agent.py console
 
 ```
 synki/
-├── agent.py                    # 🚀 Main entry point
+├── api_server.py               # 🚀 FastAPI server (token + API)
 ├── pyproject.toml              # Dependencies
 ├── .env.local                  # API keys (gitignored)
 ├── .env.example                # Environment template
 │
 ├── frontend/                   # Web UI
-│   └── index.html              # Simple test client
+│   └── app.html                # Main Synki app
 │
 ├── src/synki/                  # Core library
 │   ├── config.py               # Pydantic settings

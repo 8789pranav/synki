@@ -319,13 +319,14 @@ class CompanionAssistant(Agent):
             if hints.context_injection:
                 context_text += f"\n\n💡 Additional context:\n{hints.context_injection}"
             
-            # INJECT CONTEXT into current turn
+            # INJECT CONTEXT into current turn as SYSTEM message (not assistant!)
+            # Using role="assistant" would make the LLM think it already responded
             if context_text:
                 context_message = f"""⚠️ CONTEXT (use naturally, don't recite everything):
 {context_text}"""
                 
                 turn_ctx.add_message(
-                    role="assistant",
+                    role="system",  # MUST be system, not assistant!
                     content=context_message
                 )
                 logger.info("✅ SMART CONTEXT INJECTED")
@@ -686,105 +687,47 @@ async def handle_session(ctx: agents.JobContext):
     
     # =====================================================================
     # CHECK IF THIS IS A TOPIC CALL
-    # Method 1: Check room metadata (set by API when token generated) - FASTEST
-    # Method 2: Check proactive_pending database (fallback)
+    # Read from JOB METADATA (passed during dispatch) - most reliable method
+    # Fallback to room metadata for backwards compatibility
     # =====================================================================
+    import json
     is_topic_call = False
-    topic_data = None
+    job_metadata = {}
     
-    # FAST PATH: Check room metadata (set by /token endpoint)
+    # BEST METHOD: Read job metadata (passed during agent dispatch)
     try:
-        import json
-        room_metadata = room.metadata
-        if room_metadata:
-            meta = json.loads(room_metadata)
-            if meta.get('call_type') == 'topic':
+        if hasattr(ctx, 'job') and ctx.job and ctx.job.metadata:
+            job_metadata = json.loads(ctx.job.metadata)
+            logger.info(f"job_metadata_received", metadata=job_metadata)
+            
+            if job_metadata.get('call_type') == 'topic':
                 is_topic_call = True
-                logger.info("topic_call_detected_from_room_metadata")
+                logger.info("topic_call_detected_from_job_metadata", 
+                           topic=job_metadata.get('topic_title', 'check-in'),
+                           prompts_count=len(job_metadata.get('topic_prompts', [])))
     except Exception as e:
-        logger.debug(f"No room metadata: {e}")
+        logger.debug(f"No job metadata: {e}")
     
-    # If room metadata says it's a topic call, route immediately
-    if is_topic_call:
-        logger.info("📞 Routing to TOPIC CALLER (detected from room metadata)")
-        await topic_handler(ctx)
-        return
-    
-    # FALLBACK: Check proactive_pending database (for edge cases)
-    if supabase and user_id and not is_topic_call:
+    # FALLBACK: Check room metadata (set by /token endpoint)
+    if not is_topic_call:
         try:
-            from datetime import datetime, timedelta
-            # Only look at calls from the last 10 minutes
-            recent_cutoff = (datetime.utcnow() - timedelta(minutes=10)).isoformat()
-            
-            # Check proactive_pending for topic context
-            pending_call = supabase.table("proactive_pending")\
-                .select("id, context, created_at")\
-                .eq("user_id", user_id)\
-                .in_("status", ["pending", "accepted", "answered"])\
-                .gte("created_at", recent_cutoff)\
-                .order("created_at", desc=True)\
-                .limit(1)\
-                .execute()
-            
-            if pending_call.data:
-                context = pending_call.data[0].get('context', {})
-                if context.get('topic_prompts'):
+            room_metadata = room.metadata
+            if room_metadata:
+                meta = json.loads(room_metadata)
+                if meta.get('call_type') == 'topic':
                     is_topic_call = True
-                    topic_data = {
-                        'topic_title': context.get('topic_title', 'check-in'),
-                        'topic_prompts': context.get('topic_prompts', []),
-                        'scheduled_by': context.get('scheduled_by'),
-                        'relationship': context.get('relationship', 'friend'),
-                    }
-                    logger.info(
-                        "topic_call_detected_from_pending",
-                        topic=topic_data['topic_title'],
-                        prompts_count=len(topic_data['topic_prompts']),
-                    )
-                    
-                    # Mark as handled by agent
-                    supabase.table("proactive_pending")\
-                        .update({"status": "agent_handled"})\
-                        .eq("id", pending_call.data[0]['id'])\
-                        .execute()
-            
-            # Also check scheduled_calls if no pending found
-            if not is_topic_call:
-                scheduled_call = supabase.table("scheduled_calls")\
-                    .select("id, metadata")\
-                    .eq("user_id", user_id)\
-                    .eq("status", "triggered")\
-                    .order("triggered_at", desc=True)\
-                    .limit(1)\
-                    .execute()
-                
-                if scheduled_call.data:
-                    metadata = scheduled_call.data[0].get('metadata', {})
-                    if metadata.get('topic_prompts'):
-                        is_topic_call = True
-                        topic_data = {
-                            'topic_title': metadata.get('topic_title', 'check-in'),
-                            'topic_prompts': metadata.get('topic_prompts', []),
-                            'scheduled_by': metadata.get('scheduled_by_name'),
-                            'relationship': metadata.get('relationship', 'friend'),
-                        }
-                        logger.info(
-                            "topic_call_detected_from_scheduled",
-                            topic=topic_data['topic_title'],
-                            prompts_count=len(topic_data['topic_prompts']),
-                        )
-                        
+                    logger.info("topic_call_detected_from_room_metadata", 
+                               topic=meta.get('topic_title', 'check-in'))
         except Exception as e:
-            logger.warning(f"Failed to check for topic call: {e}")
+            logger.debug(f"No room metadata: {e}")
     
+    # If this is a topic call, route to topic handler with job metadata
     if is_topic_call:
-        # Dispatch to topic handler for soft friend persona
-        logger.info("📞 Routing to TOPIC CALLER (soft friend mode)")
-        await topic_handler(ctx)
+        logger.info("📞 Routing to TOPIC CALLER (user answered scheduled call)")
+        await topic_handler(ctx, job_metadata)
         return
     
-    # Continue with GIRLFRIEND mode for regular calls
+    # ALL other calls go to GIRLFRIEND mode
     logger.info("💕 Using GIRLFRIEND mode for regular call")
     
     # Create session in orchestrator with full context
@@ -1213,11 +1156,14 @@ async def handle_session(ctx: agents.JobContext):
         persona = random.choice(["CHILL", "PLAYFUL", "CARING", "CURIOUS"])
         greeting = random.choice(GREETING_STYLES[persona][time_period])
         
-        greeting_instruction = f"""
-        Say EXACTLY this (don't add anything): "{greeting}"
-        """
+        # Use say() for initial greeting (not generate_reply which needs user input first)
+        await agent_session.say(greeting, allow_interruptions=True)
         
-        await agent_session.generate_reply(instructions=greeting_instruction)
+        logger.info(
+            "greeting_sent",
+            greeting=greeting,
+            persona=persona,
+        )
         
         logger.info(
             "agent_session_started",

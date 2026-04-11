@@ -7,7 +7,7 @@ const CONFIG = {
     API_BASE: 'http://localhost:8000',
     
     // LiveKit Configuration
-    LIVEKIT_URL: 'wss://synk-wtut6pa9.livekit.cloud',
+    LIVEKIT_URL: 'wss://zupki-hv3uw8fv.livekit.cloud',
     
     // Storage Keys
     STORAGE_KEYS: {

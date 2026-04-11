@@ -113,6 +113,7 @@ class AppSettings(BaseSettings):
     agent_name: str = Field(default="synki-companion", description="Agent identifier")
     log_level: str = Field(default="INFO", description="Logging level")
     debug_mode: bool = Field(default=False, description="Debug mode flag")
+    preferred_tts: str = Field(default="openai", description="Preferred TTS provider: openai, cartesia, deepgram")
     
     # Nested settings
     livekit: LiveKitSettings = Field(default_factory=LiveKitSettings)

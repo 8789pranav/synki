@@ -51,7 +51,7 @@ Synki is a **real-time voice AI companion** designed for natural, low-latency co
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │                               TRANSPORT LAYER                                        │
 │  ┌───────────────────────────────────────────────────────────────────────────────┐  │
-│  │  LiveKit Cloud (wss://synk-wtut6pa9.livekit.cloud)                            │  │
+│  │  LiveKit Cloud (wss://zupki-hv3uw8fv.livekit.cloud)                           │  │
 │  │                                                                                │  │
 │  │  ┌─────────────────────────────────────────────────────────────────────────┐  │  │
 │  │  │  LiveKit Room                                                            │  │  │

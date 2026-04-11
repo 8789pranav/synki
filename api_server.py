@@ -75,6 +75,7 @@ async def scheduled_calls_checker():
                     topic_prompts = metadata.get('topic_prompts', [])
                     scheduled_by = metadata.get('scheduled_by_name')
                     relationship = metadata.get('relationship')
+                    is_self_scheduled = metadata.get('is_self_scheduled', False)
                     
                     # Update status to triggered
                     await db_service.update_scheduled_call_status(
@@ -93,7 +94,8 @@ async def scheduled_calls_checker():
                         context["topic_prompts"] = topic_prompts
                         context["scheduled_by"] = scheduled_by
                         context["relationship"] = relationship
-                        logger.info(f"📋 Topic call: {topic_title} with {len(topic_prompts)} questions")
+                        context["is_self_scheduled"] = is_self_scheduled
+                        logger.info(f"📋 Topic call: {topic_title} with {len(topic_prompts)} questions (self={is_self_scheduled})")
                     
                     # Create proactive_pending entry for the call UI
                     try:
@@ -237,6 +239,7 @@ class TokenRequest(BaseModel):
     user_id: str
     room_name: str
     agent_type: str = "companion"  # "companion" or "topic"
+    user_name: Optional[str] = None  # Optional user name for context
 
 
 class TokenResponse(BaseModel):
@@ -367,7 +370,9 @@ async def get_livekit_token(request: TokenRequest):
     
     api_key = os.getenv('LIVEKIT_API_KEY')
     api_secret = os.getenv('LIVEKIT_API_SECRET')
-    livekit_url = os.getenv('LIVEKIT_URL', 'wss://synk-wtut6pa9.livekit.cloud')
+    livekit_url = os.getenv('LIVEKIT_URL', 'wss://zupki-hv3uw8fv.livekit.cloud')
+    
+    logger.info(f"🔑 LIVEKIT CONFIG: url={livekit_url}, key={api_key[:8]}...")
     
     if not api_key or not api_secret:
         raise HTTPException(status_code=500, detail="LiveKit not configured")
@@ -393,15 +398,50 @@ async def get_livekit_token(request: TokenRequest):
         )
         logger.info(f"🏠 Room created: {request.room_name} (call_type: {request.agent_type})")
         
-        # Explicitly dispatch the agent to the room
+        # Build job metadata with topic info for the agent
+        # This is the RELIABLE way to pass data to the agent per LiveKit docs
+        job_metadata = {
+            "call_type": request.agent_type or "companion",
+            "user_id": request.user_id,
+            "user_name": request.user_name or "Friend",
+        }
+        
+        # If this is a topic call, fetch topic context from proactive_pending
+        if request.agent_type == "topic":
+            try:
+                from supabase import create_client
+                sb = create_client(
+                    os.environ.get('SUPABASE_URL'),
+                    os.environ.get('SUPABASE_SERVICE_KEY')
+                )
+                topic_context = sb.table("proactive_pending")\
+                    .select("context")\
+                    .eq("user_id", request.user_id)\
+                    .in_("status", ["pending", "accepted", "answered"])\
+                    .order("created_at", desc=True)\
+                    .limit(1)\
+                    .execute()
+                
+                if topic_context.data and topic_context.data[0].get('context'):
+                    ctx = topic_context.data[0]['context']
+                    job_metadata["topic_title"] = ctx.get("topic_title", "check-in")
+                    job_metadata["topic_prompts"] = ctx.get("topic_prompts", [])
+                    job_metadata["scheduled_by"] = ctx.get("scheduled_by", "Someone")
+                    job_metadata["is_self_scheduled"] = ctx.get("is_self_scheduled", False)
+                    logger.info(f"📋 Topic context loaded: {job_metadata['topic_title']}, {len(job_metadata.get('topic_prompts', []))} prompts")
+            except Exception as e:
+                logger.warning(f"Failed to load topic context: {e}")
+        
+        # Explicitly dispatch the agent to the room WITH job metadata
         agent_name = "synki-companion"
         dispatch = await lk_api.agent_dispatch.create_dispatch(
             CreateAgentDispatchRequest(
                 room=request.room_name,
                 agent_name=agent_name,
+                metadata=json.dumps(job_metadata),  # Pass topic info via job metadata!
             )
         )
-        logger.info(f"🤖 Agent dispatched: {dispatch.id}")
+        logger.info(f"🤖 Agent dispatched: {dispatch.id} with metadata: {job_metadata.get('call_type')}")
         
         await lk_api.aclose()
         
@@ -527,6 +567,9 @@ class ScheduleCallRequest(BaseModel):
     scheduled_at: str  # ISO format datetime
     call_type: str = "scheduled"
     message: Optional[str] = None
+    topic_id: Optional[str] = None  # UUID of call topic
+    topic_title: Optional[str] = None  # Topic name
+    topic_prompts: Optional[List[str]] = None  # Questions for agent
 
 
 # STATIC ROUTES MUST COME BEFORE DYNAMIC {user_id} ROUTES
@@ -593,11 +636,25 @@ async def schedule_call(user_id: str, request: ScheduleCallRequest, user: AuthUs
     if not user or user.id != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     
+    # Build metadata with topic info if present
+    metadata = {}
+    if request.topic_id:
+        metadata['topic_id'] = request.topic_id
+    if request.topic_title:
+        metadata['topic_title'] = request.topic_title
+    if request.topic_prompts:
+        metadata['topic_prompts'] = request.topic_prompts
+        # Mark as self-scheduled for topic agent to know
+        metadata['scheduled_by_name'] = user.name or 'self'
+        metadata['is_self_scheduled'] = True
+        logger.info(f"📋 Self-schedule with topic: {request.topic_title}, {len(request.topic_prompts)} prompts")
+    
     call_id = await db_service.schedule_call(
         user_id=user_id,
         scheduled_at=request.scheduled_at,
         call_type=request.call_type,
-        message=request.message
+        message=request.message,
+        metadata=metadata if metadata else None
     )
     
     if call_id:

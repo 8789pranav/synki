@@ -329,9 +329,10 @@ class DatabaseService:
         user_id: str, 
         scheduled_at: str,
         call_type: str = "scheduled",
-        message: str = None
+        message: str = None,
+        metadata: dict = None
     ) -> Optional[str]:
-        """Schedule a call for the user."""
+        """Schedule a call for the user with optional topic metadata."""
         if not self.is_connected:
             return None
         
@@ -344,6 +345,8 @@ class DatabaseService:
             }
             if message:
                 data['message'] = message
+            if metadata:
+                data['metadata'] = metadata
                 
             result = self.supabase.table('scheduled_calls').insert(data).execute()
             
