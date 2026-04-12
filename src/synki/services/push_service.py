@@ -28,8 +28,17 @@ FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID")
 FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH")  # Path to service account JSON
 FIREBASE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS_JSON")  # Or JSON string directly
 
+# Try to get project ID from credentials file if not set
+if not FIREBASE_PROJECT_ID and FIREBASE_CREDENTIALS_PATH and os.path.exists(FIREBASE_CREDENTIALS_PATH):
+    try:
+        with open(FIREBASE_CREDENTIALS_PATH, 'r') as f:
+            creds = json.load(f)
+            FIREBASE_PROJECT_ID = creds.get('project_id')
+    except Exception:
+        pass
+
 # FCM API endpoint
-FCM_URL = f"https://fcm.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/messages:send"
+FCM_URL = f"https://fcm.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/messages:send" if FIREBASE_PROJECT_ID else None
 
 
 class PushNotificationService:
@@ -41,25 +50,38 @@ class PushNotificationService:
     
     def _init_credentials(self):
         """Initialize Google credentials for FCM."""
+        logger.info("🔥 ===== INITIALIZING FCM CREDENTIALS =====")
+        logger.info(f"🔥 Project ID: {FIREBASE_PROJECT_ID}")
+        logger.info(f"🔥 Credentials path: {FIREBASE_CREDENTIALS_PATH}")
+        logger.info(f"🔥 Has credentials JSON: {bool(FIREBASE_CREDENTIALS_JSON)}")
+        
         try:
             if FIREBASE_CREDENTIALS_JSON:
                 # Parse JSON string
+                logger.info("🔥 Loading credentials from JSON string...")
                 creds_dict = json.loads(FIREBASE_CREDENTIALS_JSON)
                 self.credentials = service_account.Credentials.from_service_account_info(
                     creds_dict,
                     scopes=["https://www.googleapis.com/auth/firebase.messaging"]
                 )
+                logger.info("🔥 ✅ Credentials loaded from JSON!")
             elif FIREBASE_CREDENTIALS_PATH and os.path.exists(FIREBASE_CREDENTIALS_PATH):
                 # Load from file
+                logger.info(f"🔥 Loading credentials from file: {FIREBASE_CREDENTIALS_PATH}")
                 self.credentials = service_account.Credentials.from_service_account_file(
                     FIREBASE_CREDENTIALS_PATH,
                     scopes=["https://www.googleapis.com/auth/firebase.messaging"]
                 )
+                logger.info("🔥 ✅ Credentials loaded from file!")
             else:
+                logger.warning("🔥 ⚠️ NO FCM CREDENTIALS CONFIGURED!")
                 logger.warning("firebase_credentials_not_configured", 
                              hint="Set FIREBASE_CREDENTIALS_JSON or FIREBASE_CREDENTIALS_PATH")
         except Exception as e:
-            logger.error("firebase_credentials_error", error=str(e))
+            logger.error("🔥 ❌ FCM CREDENTIALS ERROR!")
+            logger.error(f"🔥 Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def _get_access_token(self) -> Optional[str]:
         """Get valid access token for FCM API."""
@@ -97,9 +119,13 @@ class PushNotificationService:
         Returns:
             True if sent successfully, False otherwise
         """
+        if not FCM_URL:
+            logger.error("📲 ❌ FCM not configured - missing project ID")
+            return False
+        
         access_token = self._get_access_token()
         if not access_token:
-            logger.error("fcm_no_access_token")
+            logger.error("📲 ❌ FCM no access token - credentials not configured")
             return False
         
         # Build message payload
@@ -170,6 +196,14 @@ class PushNotificationService:
         }
         
         # Send to FCM
+        logger.info("📲 ===== SENDING FCM MESSAGE =====")
+        logger.info(f"📲 FCM URL: {FCM_URL}")
+        logger.info(f"📲 Token: {token[:30]}...")
+        logger.info(f"📲 Title: {title}")
+        logger.info(f"📲 Body: {body}")
+        logger.info(f"📲 Call style: {call_style}")
+        logger.info(f"📲 Data payload: {data}")
+        
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -183,16 +217,20 @@ class PushNotificationService:
                 )
                 
                 if response.status_code == 200:
-                    logger.info("fcm_notification_sent", token=token[:20]+"...", title=title)
+                    logger.info("📲 ✅ FCM SUCCESS!")
+                    logger.info(f"📲 Response: {response.text[:100]}")
                     return True
                 else:
-                    logger.error("fcm_send_failed", 
-                               status=response.status_code, 
-                               error=response.text)
+                    logger.error("📲 ❌ FCM FAILED!")
+                    logger.error(f"📲 Status: {response.status_code}")
+                    logger.error(f"📲 Error: {response.text}")
                     return False
                     
         except Exception as e:
-            logger.error("fcm_send_error", error=str(e))
+            logger.error("📲 ❌ FCM EXCEPTION!")
+            logger.error(f"📲 Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False
     
     async def send_call_notification(
@@ -214,6 +252,12 @@ class PushNotificationService:
         Returns:
             True if sent successfully
         """
+        logger.info("📲 ===== FCM CALL NOTIFICATION =====")
+        logger.info(f"📲 Token: {token[:30]}...")
+        logger.info(f"📲 Caller: {caller_name}")
+        logger.info(f"📲 Call ID: {call_id}")
+        logger.info(f"📲 Message: {message}")
+        
         return await self.send_notification(
             token=token,
             title=f"📞 {caller_name}",

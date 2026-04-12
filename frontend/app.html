@@ -1650,6 +1650,264 @@
             box-shadow: 0 6px 20px var(--primary-glow);
         }
 
+        /* P2P Direct Call Button - Green to distinguish from schedule */
+        .connection-btn-direct {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+            animation: directCallPulse 2s ease-in-out infinite;
+        }
+
+        .connection-btn-direct:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+        }
+
+        .connection-btn-direct.calling {
+            animation: callingPulse 0.5s ease-in-out infinite;
+            cursor: wait;
+        }
+
+        @keyframes directCallPulse {
+            0%, 100% { box-shadow: 0 0 0 transparent; }
+            50% { box-shadow: 0 0 15px rgba(34, 197, 94, 0.3); }
+        }
+
+        @keyframes callingPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Online indicator in connection card */
+        .connection-online-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            background: rgba(34, 197, 94, 0.2);
+            border-radius: 20px;
+            font-size: 0.7rem;
+            color: #22c55e;
+            margin-left: 8px;
+        }
+
+        .connection-online-badge .online-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #22c55e;
+            animation: onlinePulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes onlinePulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(0.8); }
+        }
+
+        /* Outgoing call overlay */
+        .outgoing-call-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--bg-deep) 0%, #0d0d1f 50%, #1a0a2e 100%);
+            z-index: 9998;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            animation: overlay-in 0.4s ease-out;
+        }
+
+        .outgoing-call-overlay::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 50% 30%, rgba(34, 197, 94, 0.2) 0%, transparent 50%),
+                radial-gradient(ellipse at 30% 70%, var(--secondary-glow) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .outgoing-status {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-top: 20px;
+        }
+
+        .outgoing-status .dots {
+            display: inline-block;
+        }
+
+        .outgoing-status .dots::after {
+            content: '';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        .cancel-call-btn {
+            margin-top: 60px;
+            padding: 15px 40px;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .cancel-call-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(239, 68, 68, 0.4);
+        }
+
+        /* ===== IN-CALL OVERLAY ===== */
+        .in-call-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a1a 0%, #0d0d1f 50%, #1a1a2e 100%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            animation: overlay-in 0.4s ease-out;
+        }
+
+        .in-call-overlay::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 50% 30%, rgba(34, 197, 94, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 30% 70%, rgba(167, 139, 250, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .call-info {
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .call-peer-avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--success), #059669);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3.5rem;
+            margin: 0 auto 20px;
+            box-shadow: 0 0 40px rgba(34, 197, 94, 0.4);
+            animation: call-connected-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes call-connected-pulse {
+            0%, 100% { box-shadow: 0 0 40px rgba(34, 197, 94, 0.4); }
+            50% { box-shadow: 0 0 60px rgba(34, 197, 94, 0.6); }
+        }
+
+        .call-peer-name {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 8px;
+        }
+
+        .call-status {
+            font-size: 1rem;
+            color: var(--success);
+            margin-bottom: 8px;
+        }
+
+        .call-duration {
+            font-family: 'Space Grotesk', monospace;
+            font-size: 2rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .call-controls {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .call-control-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .call-control-btn span {
+            font-size: 0.7rem;
+            margin-top: 4px;
+            color: inherit;
+        }
+
+        .call-control-btn.mute-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .call-control-btn.mute-btn.active {
+            background: rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        .call-control-btn.speaker-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .call-control-btn.speaker-btn.active {
+            background: rgba(167, 139, 250, 0.3);
+            color: var(--secondary);
+        }
+
+        .call-control-btn.hangup-btn {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            width: 80px;
+            height: 80px;
+            font-size: 1.8rem;
+            box-shadow: 0 10px 30px rgba(239, 68, 68, 0.4);
+        }
+
+        .call-control-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .call-control-btn.hangup-btn:hover {
+            box-shadow: 0 15px 40px rgba(239, 68, 68, 0.6);
+        }
+
         .connection-btn-accept {
             background: linear-gradient(135deg, #22c55e, #16a34a);
             color: white;
@@ -1995,6 +2253,177 @@
             border: 2px solid var(--bg-dark);
             animation: badgePulse 2s infinite;
         }
+
+        /* ===== SETTINGS STYLES ===== */
+        .btn-settings {
+            background: var(--surface);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+
+        .btn-settings:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--primary);
+            color: var(--text-primary);
+        }
+
+        .messages-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: var(--error);
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 16px;
+            text-align: center;
+        }
+
+        .settings-section {
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .settings-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .settings-section-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+        }
+
+        .setting-info {
+            flex: 1;
+        }
+
+        .setting-label {
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .setting-description {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            width: 52px;
+            height: 28px;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--surface);
+            border: 2px solid var(--border-subtle);
+            border-radius: 28px;
+            transition: all 0.3s;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 2px;
+            bottom: 2px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-color: transparent;
+        }
+
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+            background: white;
+        }
+
+        /* Settings Input */
+        .settings-input {
+            width: 100%;
+            padding: 14px 16px;
+            background: var(--surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-family: inherit;
+            margin-top: 8px;
+            transition: all 0.2s;
+        }
+
+        .settings-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        .settings-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .settings-textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        /* Settings Select */
+        .settings-select {
+            width: 100%;
+            padding: 14px 16px;
+            background: var(--surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-family: inherit;
+            margin-top: 8px;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+        }
+
+        .settings-select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
     </style>
 </head>
 <body>
@@ -2109,6 +2538,10 @@
                 <div class="action-buttons">
                     <button class="btn btn-schedule" id="scheduleCallBtn" onclick="openScheduleModal()">⏰ Schedule</button>
                     <button class="btn btn-history" id="callHistoryBtn" onclick="openCallHistory()">📱 History</button>
+                    <button class="btn btn-settings" id="settingsBtn" onclick="openSettingsModal()" style="position: relative;">
+                        ⚙️ Settings
+                        <span class="messages-badge hidden" id="messagesUnreadBadge">0</span>
+                    </button>
                 </div>
 
                 <!-- Scheduled Call Indicator -->
@@ -2140,20 +2573,57 @@
         </div>
     </div>
 
-    <!-- Incoming Call Overlay -->
+    <!-- Incoming Call Overlay (supports both Synki proactive and P2P calls) -->
     <div class="incoming-call-overlay hidden" id="incomingCallOverlay">
         <div class="call-avatar-container">
             <div class="pulse-ring"></div>
             <div class="pulse-ring"></div>
             <div class="pulse-ring"></div>
-            <div class="call-avatar">💕</div>
+            <div class="call-avatar" id="callerAvatar">💕</div>
         </div>
-        <div class="call-caller-name">Synki</div>
-        <div class="call-status-text">Incoming call...</div>
+        <div class="call-caller-name" id="callerName">Synki</div>
+        <div class="call-status-text" id="callStatusText">Incoming call...</div>
         <div class="call-message" id="callMessage">Miss kar rahi thi tumhe...</div>
         <div class="call-buttons">
-            <button class="call-btn decline-call-btn" onclick="declineProactiveCall()">✕</button>
-            <button class="call-btn accept-call-btn" onclick="acceptProactiveCall()">📞</button>
+            <button class="call-btn decline-call-btn" id="declineCallBtn" onclick="handleDeclineCall()">✕</button>
+            <button class="call-btn accept-call-btn" id="acceptCallBtn" onclick="handleAcceptCall()">📞</button>
+        </div>
+    </div>
+
+    <!-- Outgoing Call Overlay (when calling someone) -->
+    <div class="outgoing-call-overlay hidden" id="outgoingCallOverlay">
+        <div class="call-avatar-container">
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring"></div>
+            <div class="call-avatar" id="outgoingCallerAvatar">👤</div>
+        </div>
+        <div class="call-caller-name" id="outgoingTargetName">Friend</div>
+        <div class="outgoing-status">Calling<span class="dots"></span></div>
+        <button class="cancel-call-btn" onclick="cancelOutgoingCall()">✕ Cancel</button>
+    </div>
+
+    <!-- In-Call Overlay (shown when connected) -->
+    <div class="in-call-overlay hidden" id="inCallOverlay">
+        <div class="call-info">
+            <div class="call-peer-avatar" id="inCallAvatar">👤</div>
+            <div class="call-peer-name" id="inCallPeerName">Friend</div>
+            <div class="call-status" id="inCallStatus">🟢 Connected</div>
+            <div class="call-duration" id="inCallDuration">00:00</div>
+        </div>
+        <div class="call-controls">
+            <button class="call-control-btn mute-btn" id="muteBtn" onclick="toggleMute()">
+                🎤
+                <span id="muteBtnLabel">Mute</span>
+            </button>
+            <button class="call-control-btn hangup-btn" onclick="hangupCall()">
+                📵
+                <span>End</span>
+            </button>
+            <button class="call-control-btn speaker-btn" id="speakerBtn" onclick="toggleSpeaker()">
+                🔊
+                <span id="speakerBtnLabel">Speaker</span>
+            </button>
         </div>
     </div>
 
@@ -2375,6 +2845,93 @@
         </div>
     </div>
 
+    <!-- Settings Modal -->
+    <div class="modal-overlay hidden" id="settingsModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <span>⚙️</span>
+                <h2>Settings</h2>
+                <button class="modal-close" onclick="closeSettingsModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Auto-Reply Section -->
+                <div class="settings-section">
+                    <div class="settings-section-title">🤖 Auto-Reply (AI Secretary)</div>
+                    
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <div class="setting-label">Enable Auto-Reply</div>
+                            <div class="setting-description">When enabled, your AI will answer calls on your behalf</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="autoReplyEnabled" onchange="saveAutoReplySettings()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    
+                    <div id="autoReplyOptions" style="display: none;">
+                        <div style="margin-top: 16px;">
+                            <label class="setting-label">Auto-Reply Message</label>
+                            <textarea id="autoReplyMessage" 
+                                      class="settings-input settings-textarea" 
+                                      placeholder="e.g., Main abhi busy hoon, please message chhod do"
+                                      onchange="saveAutoReplySettings()"></textarea>
+                        </div>
+                        
+                        <div style="margin-top: 16px;">
+                            <label class="setting-label">When to Auto-Reply</label>
+                            <select id="autoReplyWhen" class="settings-select" onchange="saveAutoReplySettings()">
+                                <option value="offline">📴 When I'm Offline</option>
+                                <option value="busy">🔴 When I'm Busy</option>
+                                <option value="always">🔒 Always (Secretary Mode)</option>
+                            </select>
+                        </div>
+                        
+                        <div style="margin-top: 16px;">
+                            <label class="setting-label">AI Voice Style</label>
+                            <select id="autoReplyVoice" class="settings-select" onchange="saveAutoReplySettings()">
+                                <option value="sweet">💕 Sweet & Friendly</option>
+                                <option value="professional">💼 Professional</option>
+                                <option value="casual">😊 Casual</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- My Status Section -->
+                <div class="settings-section">
+                    <div class="settings-section-title">📍 My Status</div>
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <div class="setting-label">Current Status</div>
+                        </div>
+                        <select id="myStatus" class="settings-select" style="width: auto; margin-top: 0;" onchange="updateMyStatus()">
+                            <option value="online">🟢 Online</option>
+                            <option value="away">🟡 Away</option>
+                            <option value="busy">🔴 Busy</option>
+                            <option value="offline">⚫ Appear Offline</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Messages Section -->
+                <div class="settings-section">
+                    <div class="settings-section-title">📬 Messages from Callers</div>
+                    <div id="autoReplyMessagesList" style="max-height: 200px; overflow-y: auto;">
+                        <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                            No messages yet
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Save Status -->
+                <div id="settingsSaveStatus" style="text-align: center; padding: 12px; color: var(--success); display: none;">
+                    ✓ Settings saved!
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // ===== CONFIGURATION =====
         const API_BASE = 'http://localhost:8000';
@@ -2409,6 +2966,7 @@
         let accessToken = null;
         let userMemories = {};
         let chatHistory = [];
+        let isConnected = false;  // Track connection state for P2P calls
 
         // Elements
         const authContainer = document.getElementById('authContainer');
@@ -2594,6 +3152,9 @@
             
             // Start proactive polling (checks for incoming calls/messages)
             startProactivePolling();
+            
+            // Start P2P call polling (checks for incoming P2P calls from friends)
+            startP2PCallPolling();
             
             // Initialize push notifications
             await initializePushNotifications();
@@ -3042,6 +3603,8 @@
 
         function handleDisconnect() {
             room = null;
+            isConnected = false;
+            isInP2PCall = false;
             setStatus('Disconnected', '');
             avatarStatusEl.textContent = 'Click Connect to talk again 💕';
             avatarEl.classList.remove('speaking', 'listening');
@@ -3053,6 +3616,9 @@
             
             // Update presence to online (no longer in call)
             updateMyPresence('online', 'browsing');
+            
+            // Restart P2P call polling
+            startP2PCallPolling();
         }
 
         function setStatus(text, className) {
@@ -3094,6 +3660,9 @@
                         
                         // Start proactive polling after login
                         startProactivePolling();
+                        
+                        // Start P2P call polling
+                        startP2PCallPolling();
                     } else {
                         // Token expired, clear storage
                         localStorage.removeItem('synki_token');
@@ -3112,6 +3681,544 @@
         let proactiveInterval = null;
         let currentPendingContact = null;
         const PROACTIVE_POLL_INTERVAL = 30000; // Check every 30 seconds
+
+        // ===== P2P CALLING SYSTEM =====
+        let p2pCallInterval = null;
+        let currentP2PCall = null;  // { id, caller_id, caller_name, room_name, created_at }
+        let outgoingP2PCall = null; // { room_name, target_id, target_name, status }
+        const P2P_POLL_INTERVAL = 2000; // Check every 2 seconds for incoming calls
+        let isInP2PCall = false;
+        let declinedCallIds = new Set(); // Track declined/answered calls to prevent re-ringing
+        let currentlyShowingCall = false; // Prevent showing multiple call overlays
+        
+        // In-call UI state
+        let callDurationInterval = null;
+        let callStartTime = null;
+        let isMuted = false;
+        let isSpeakerOn = true;
+        let currentCallPeerName = 'Friend';
+
+        // Start P2P call polling
+        function startP2PCallPolling() {
+            if (p2pCallInterval) clearInterval(p2pCallInterval);
+            
+            // Check immediately
+            checkIncomingP2PCalls();
+            
+            // Then check every 2 seconds
+            p2pCallInterval = setInterval(checkIncomingP2PCalls, P2P_POLL_INTERVAL);
+            console.log('📞 P2P call polling started');
+        }
+
+        // Stop P2P call polling
+        function stopP2PCallPolling() {
+            if (p2pCallInterval) {
+                clearInterval(p2pCallInterval);
+                p2pCallInterval = null;
+            }
+        }
+
+        // Check for incoming P2P calls
+        async function checkIncomingP2PCalls() {
+            // Don't check if already showing a call, in a call, or connected to Synki
+            if (!currentUser || !accessToken || isInP2PCall || isConnected || currentlyShowingCall || currentP2PCall) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/calls/incoming`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                
+                if (data.has_incoming_call && data.call) {
+                    // Skip if we already declined or answered this call
+                    if (declinedCallIds.has(data.call.id)) {
+                        console.log('📞 Skipping already handled call:', data.call.id);
+                        return;
+                    }
+                    
+                    console.log('📞 Incoming P2P call!', data.call);
+                    currentP2PCall = data.call;
+                    currentlyShowingCall = true;
+                    showIncomingP2PCall(data.call);
+                }
+            } catch (e) {
+                console.log('📞 P2P call check error:', e);
+            }
+        }
+
+        // Show incoming P2P call UI
+        function showIncomingP2PCall(call) {
+            // Update UI elements
+            document.getElementById('callerAvatar').textContent = '👤';
+            document.getElementById('callerName').textContent = call.caller_name || 'Friend';
+            document.getElementById('callStatusText').textContent = 'Incoming call...';
+            document.getElementById('callMessage').textContent = `${call.caller_name || 'Someone'} is calling you! 📞`;
+            
+            // Show overlay
+            document.getElementById('incomingCallOverlay').classList.remove('hidden');
+            
+            // Play ringtone
+            const ringtone = document.getElementById('ringtone');
+            ringtone.volume = 0.7;
+            ringtone.currentTime = 0;
+            ringtone.play().catch(e => console.log('Autoplay blocked'));
+            
+            // Vibrate
+            if ('vibrate' in navigator) {
+                const vibratePattern = () => navigator.vibrate([1000, 500, 1000, 500, 1000]);
+                vibratePattern();
+                window.vibrateInterval = setInterval(vibratePattern, 5000);
+            }
+            
+            // Desktop notification
+            if (Notification.permission === 'granted') {
+                new Notification(`📞 ${call.caller_name || 'Someone'} is calling!`, {
+                    body: 'Tap to answer',
+                    tag: 'synki-p2p-call',
+                    requireInteraction: true
+                });
+            }
+        }
+
+        // Initiate a P2P direct call
+        async function initiateDirectCall(targetUserId, targetName) {
+            if (!currentUser || !accessToken) {
+                addMessage('system', '⚠️ Please log in first');
+                return;
+            }
+            
+            if (isInP2PCall || isConnected) {
+                addMessage('system', '⚠️ Already in a call');
+                return;
+            }
+            
+            console.log(`📞 Initiating P2P call to ${targetName} (${targetUserId})`);
+            
+            // Show outgoing call overlay
+            document.getElementById('outgoingCallerAvatar').textContent = targetName[0]?.toUpperCase() || '👤';
+            document.getElementById('outgoingTargetName').textContent = targetName;
+            document.getElementById('outgoingCallOverlay').classList.remove('hidden');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/call/direct/${targetUserId}`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.detail || 'Failed to initiate call');
+                }
+                
+                console.log('📞 Call initiated:', data);
+                
+                outgoingP2PCall = {
+                    room_name: data.room_name,
+                    target_id: targetUserId,
+                    target_name: targetName,
+                    token: data.token,
+                    url: data.url,
+                    call_type: data.call_type,
+                    auto_reply: data.auto_reply
+                };
+                
+                if (data.auto_reply) {
+                    // Auto-reply mode - AI secretary answers
+                    currentCallPeerName = `${targetName}'s AI`;
+                    addMessage('system', `📞 ${targetName} is unavailable. Connecting to their AI...`);
+                    document.getElementById('outgoingCallOverlay').classList.add('hidden');
+                    
+                    // Connect to the room with the AI
+                    await connectToP2PRoom(data.token, data.room_name, data.url);
+                } else {
+                    // Direct call - wait for target to answer
+                    addMessage('system', `📞 Calling ${targetName}...`);
+                    
+                    // Poll for call status
+                    pollOutgoingCallStatus(data.room_name, data.token, data.url);
+                }
+                
+            } catch (e) {
+                console.error('📞 Call failed:', e);
+                document.getElementById('outgoingCallOverlay').classList.add('hidden');
+                addMessage('system', `❌ Call failed: ${e.message}`);
+            }
+        }
+
+        // Poll for outgoing call status
+        async function pollOutgoingCallStatus(roomName, token, url) {
+            const maxWait = 60000; // 60 seconds max wait
+            const pollInterval = 2000;
+            let elapsed = 0;
+            
+            const pollFn = async () => {
+                if (!outgoingP2PCall || outgoingP2PCall.room_name !== roomName) return;
+                
+                elapsed += pollInterval;
+                if (elapsed > maxWait) {
+                    // Timeout - cancel call
+                    cancelOutgoingCall();
+                    addMessage('system', `📞 ${outgoingP2PCall?.target_name || 'They'} didn't answer`);
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`${API_BASE}/api/calls/status/${roomName}`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    const data = await response.json();
+                    
+                    if (data.status === 'answered') {
+                        // They answered! Connect to room
+                        console.log('📞 CALLER: Call was answered!');
+                        currentCallPeerName = outgoingP2PCall.target_name || 'Friend';
+                        console.log('📞 CALLER: Setting peer name to:', currentCallPeerName);
+                        document.getElementById('outgoingCallOverlay').classList.add('hidden');
+                        addMessage('system', `📞 ${currentCallPeerName} answered! Connecting...`);
+                        await connectToP2PRoom(token, roomName, url);
+                        console.log('📞 CALLER: connectToP2PRoom completed');
+                        return;
+                    } else if (data.status === 'declined' || data.status === 'missed') {
+                        // Call was declined or missed
+                        document.getElementById('outgoingCallOverlay').classList.add('hidden');
+                        addMessage('system', `📞 ${outgoingP2PCall.target_name} declined the call`);
+                        outgoingP2PCall = null;
+                        return;
+                    }
+                    
+                    // Still ringing - continue polling
+                    setTimeout(pollFn, pollInterval);
+                } catch (e) {
+                    console.error('Poll error:', e);
+                    setTimeout(pollFn, pollInterval);
+                }
+            };
+            
+            setTimeout(pollFn, pollInterval);
+        }
+
+        // Cancel outgoing call
+        async function cancelOutgoingCall() {
+            document.getElementById('outgoingCallOverlay').classList.add('hidden');
+            
+            if (outgoingP2PCall) {
+                try {
+                    await fetch(`${API_BASE}/api/calls/cancel/${outgoingP2PCall.room_name}`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                } catch (e) {
+                    console.log('Cancel call error:', e);
+                }
+                
+                addMessage('system', '📞 Call cancelled');
+                outgoingP2PCall = null;
+            }
+        }
+
+        // ===== TRACK HANDLERS FOR P2P CALLS =====
+        function handleTrackSubscribed(track, publication, participant) {
+            console.log('🔊 Track subscribed:', track.kind, 'from', participant.identity);
+            if (track.kind === 'audio') {
+                const audio = track.attach();
+                audio.id = `audio-${participant.identity}`;
+                audio.autoplay = true;
+                audio.playsInline = true;
+                document.body.appendChild(audio);
+                
+                // Ensure audio plays
+                audio.play().catch(e => {
+                    console.warn('Audio autoplay blocked:', e);
+                    document.addEventListener('click', () => audio.play(), { once: true });
+                });
+                
+                console.log('🔊 Audio attached for:', participant.identity);
+                avatarEl.classList.add('speaking');
+                avatarStatusEl.textContent = `${participant.identity} is talking... 🎧`;
+            }
+        }
+
+        function handleTrackUnsubscribed(track) {
+            console.log('🔊 Track unsubscribed:', track.kind);
+            if (track.kind === 'audio') {
+                track.detach().forEach(el => el.remove());
+            }
+        }
+
+        // Connect to a P2P room
+        async function connectToP2PRoom(token, roomName, url) {
+            isInP2PCall = true;
+            stopP2PCallPolling();
+            
+            try {
+                // Connect using LiveKit
+                room = new LivekitClient.Room();
+                
+                room.on(LivekitClient.RoomEvent.TrackSubscribed, handleTrackSubscribed);
+                room.on(LivekitClient.RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+                room.on(LivekitClient.RoomEvent.Disconnected, handleP2PDisconnect);
+                room.on(LivekitClient.RoomEvent.ParticipantConnected, (p) => {
+                    console.log(`📞 ${p.identity} joined the call`);
+                    addMessage('system', `✅ Connected!`);
+                });
+                
+                console.log('📞 Connecting to room:', roomName);
+                await room.connect(url, token);
+                console.log('📞 Connected to room successfully!');
+                
+                // Enable microphone
+                await room.localParticipant.setMicrophoneEnabled(true);
+                console.log('📞 Mic enabled');
+                
+                isConnected = true;
+                updateUI(true);
+                
+                // Show in-call UI
+                console.log('📞 About to show in-call UI for:', currentCallPeerName);
+                try {
+                    showInCallUI(currentCallPeerName);
+                } catch (uiError) {
+                    console.error('📞 ERROR showing in-call UI:', uiError);
+                }
+                
+                console.log('📞 P2P call connected and UI shown!');
+                
+            } catch (e) {
+                console.error('📞 Failed to connect:', e);
+                addMessage('system', '❌ Failed to connect to call');
+                isInP2PCall = false;
+                startP2PCallPolling();
+            }
+        }
+
+        // Handle P2P disconnect
+        function handleP2PDisconnect() {
+            console.log('📞 handleP2PDisconnect called');
+            console.log('📞 Stack trace:', new Error().stack);
+            isInP2PCall = false;
+            isConnected = false;
+            outgoingP2PCall = null;
+            currentP2PCall = null;
+            hideInCallUI();
+            updateUI(false);
+            addMessage('system', '📞 Call ended');
+            startP2PCallPolling();
+        }
+
+        // ===== IN-CALL UI FUNCTIONS =====
+        function showInCallUI(peerName) {
+            console.log('📞 showInCallUI called with:', peerName);
+            currentCallPeerName = peerName || 'Friend';
+            document.getElementById('inCallPeerName').textContent = currentCallPeerName;
+            document.getElementById('inCallAvatar').textContent = currentCallPeerName.charAt(0).toUpperCase();
+            
+            // Hide ALL other overlays first
+            document.getElementById('outgoingCallOverlay').classList.add('hidden');
+            document.getElementById('incomingCallOverlay').classList.add('hidden');
+            
+            // Show in-call UI
+            document.getElementById('inCallOverlay').classList.remove('hidden');
+            console.log('📞 In-call overlay shown!');
+            
+            // Start call duration timer
+            callStartTime = Date.now();
+            updateCallDuration();
+            callDurationInterval = setInterval(updateCallDuration, 1000);
+            
+            // Reset button states
+            isMuted = false;
+            isSpeakerOn = true;
+            updateMuteButton();
+            updateSpeakerButton();
+        }
+
+        function hideInCallUI() {
+            document.getElementById('inCallOverlay').classList.add('hidden');
+            if (callDurationInterval) {
+                clearInterval(callDurationInterval);
+                callDurationInterval = null;
+            }
+            callStartTime = null;
+        }
+
+        function updateCallDuration() {
+            if (!callStartTime) return;
+            const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+            const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const secs = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById('inCallDuration').textContent = `${mins}:${secs}`;
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            if (room && room.localParticipant) {
+                room.localParticipant.setMicrophoneEnabled(!isMuted);
+            }
+            updateMuteButton();
+        }
+
+        function updateMuteButton() {
+            const btn = document.getElementById('muteBtn');
+            const label = document.getElementById('muteBtnLabel');
+            if (isMuted) {
+                btn.classList.add('active');
+                btn.innerHTML = '🔇<span id="muteBtnLabel">Unmute</span>';
+            } else {
+                btn.classList.remove('active');
+                btn.innerHTML = '🎤<span id="muteBtnLabel">Mute</span>';
+            }
+        }
+
+        function toggleSpeaker() {
+            isSpeakerOn = !isSpeakerOn;
+            // Control all remote audio elements
+            document.querySelectorAll('audio').forEach(audio => {
+                if (audio.id !== 'ringtone') {
+                    audio.volume = isSpeakerOn ? 1.0 : 0.3;
+                }
+            });
+            updateSpeakerButton();
+        }
+
+        function updateSpeakerButton() {
+            const btn = document.getElementById('speakerBtn');
+            if (isSpeakerOn) {
+                btn.classList.add('active');
+                btn.innerHTML = '🔊<span id="speakerBtnLabel">Speaker</span>';
+            } else {
+                btn.classList.remove('active');
+                btn.innerHTML = '🔈<span id="speakerBtnLabel">Earpiece</span>';
+            }
+        }
+
+        async function hangupCall() {
+            console.log('📞 Hanging up call...');
+            hideInCallUI();
+            
+            if (room) {
+                try {
+                    await room.disconnect();
+                } catch (e) {
+                    console.error('Disconnect error:', e);
+                }
+            }
+            
+            handleP2PDisconnect();
+        }
+
+        // Handle incoming call actions (unified for both Synki and P2P)
+        function handleAcceptCall() {
+            if (currentP2PCall) {
+                acceptP2PCall();
+            } else if (currentPendingContact) {
+                acceptProactiveCall();
+            }
+        }
+
+        function handleDeclineCall() {
+            if (currentP2PCall) {
+                declineP2PCall();
+            } else if (currentPendingContact) {
+                declineProactiveCall();
+            }
+        }
+
+        // Accept P2P call
+        async function acceptP2PCall() {
+            // Stop ringtone and vibration
+            document.getElementById('ringtone').pause();
+            document.getElementById('ringtone').currentTime = 0;
+            if (window.vibrateInterval) clearInterval(window.vibrateInterval);
+            navigator.vibrate && navigator.vibrate(0);
+            
+            // Hide overlay
+            document.getElementById('incomingCallOverlay').classList.add('hidden');
+            currentlyShowingCall = false;
+            
+            if (!currentP2PCall) {
+                console.log('❌ No currentP2PCall when accepting');
+                return;
+            }
+            
+            // Mark this call as handled so we don't show it again
+            declinedCallIds.add(currentP2PCall.id);
+            
+            const callId = currentP2PCall.id;
+            const callerName = currentP2PCall.caller_name;
+            
+            try {
+                console.log('📞 Accepting call:', callId);
+                const response = await fetch(`${API_BASE}/api/calls/accept/${callId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                
+                console.log('📞 Accept response:', data);
+                
+                if (data.success) {
+                    console.log('📞 CALLEE: Call accepted successfully!');
+                    currentCallPeerName = data.caller_name || callerName || 'Friend';
+                    console.log('📞 CALLEE: Setting peer name to:', currentCallPeerName);
+                    addMessage('system', `📞 Connected with ${currentCallPeerName}!`);
+                    isInP2PCall = true;
+                    await connectToP2PRoom(data.token, data.room_name, data.url);
+                    console.log('📞 CALLEE: connectToP2PRoom completed');
+                } else {
+                    addMessage('system', '❌ Failed to accept call: ' + (data.detail || 'Unknown error'));
+                }
+            } catch (e) {
+                console.error('Accept call error:', e);
+                addMessage('system', '❌ Failed to accept call');
+            }
+            
+            currentP2PCall = null;
+        }
+
+        // Decline P2P call
+        async function declineP2PCall() {
+            // Stop ringtone and vibration
+            document.getElementById('ringtone').pause();
+            document.getElementById('ringtone').currentTime = 0;
+            if (window.vibrateInterval) clearInterval(window.vibrateInterval);
+            navigator.vibrate && navigator.vibrate(0);
+            
+            // Hide overlay
+            document.getElementById('incomingCallOverlay').classList.add('hidden');
+            currentlyShowingCall = false;
+            
+            if (currentP2PCall) {
+                // Mark this call as declined so we don't show it again
+                declinedCallIds.add(currentP2PCall.id);
+                console.log('📞 Declining call:', currentP2PCall.id);
+                
+                try {
+                    await fetch(`${API_BASE}/api/calls/decline/${currentP2PCall.id}`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                } catch (e) {
+                    console.log('Decline call error:', e);
+                }
+                
+                addMessage('system', `📞 Declined call from ${currentP2PCall.caller_name || 'Friend'}`);
+            }
+            
+            currentP2PCall = null;
+            
+            // Clear old declined calls after 5 minutes to prevent memory buildup
+            setTimeout(() => {
+                if (declinedCallIds.size > 50) {
+                    declinedCallIds.clear();
+                }
+            }, 300000);
+        }
+
+        // Start P2P call polling (now starts after auth)
 
         // Start polling for proactive contacts
         function startProactivePolling() {
@@ -4228,6 +5335,7 @@
                             <div class="connection-name">
                                 ${conn.nickname || conn.other_user_name}
                                 ${statusText ? `<span class="connection-status-text ${status}">${statusText}</span>` : ''}
+                                ${isOnline ? `<span class="connection-online-badge"><span class="online-dot"></span>Online</span>` : ''}
                             </div>
                             <div class="connection-details">
                                 <span class="connection-badge">${getRelationEmoji(conn.relationship)} ${conn.relationship}</span>
@@ -4236,8 +5344,11 @@
                             </div>
                         </div>
                         <div class="connection-actions">
-                            <button class="connection-btn connection-btn-call" onclick="openScheduleCallModal('${conn.connection_id}', '${conn.other_user_id}', '${conn.other_user_name}')">
-                                📞 Call
+                            <button class="connection-btn connection-btn-direct" onclick="initiateDirectCall('${conn.other_user_id}', '${conn.other_user_name || 'Friend'}')" title="Call now">
+                                📞
+                            </button>
+                            <button class="connection-btn connection-btn-call" onclick="openScheduleCallModal('${conn.connection_id}', '${conn.other_user_id}', '${conn.other_user_name}')" title="Schedule call">
+                                ⏰
                             </button>
                         </div>
                     </div>
@@ -4912,6 +6023,185 @@
             const mins = Math.floor(seconds / 60);
             const secs = seconds % 60;
             return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // ===== SETTINGS FUNCTIONS =====
+        let autoReplySettings = {
+            auto_reply_enabled: false,
+            auto_reply_message: 'Main abhi busy hoon, please message chhod do',
+            auto_reply_voice: 'sweet',
+            auto_reply_when: 'offline'
+        };
+
+        async function openSettingsModal() {
+            document.getElementById('settingsModal').classList.remove('hidden');
+            await loadAutoReplySettings();
+            await loadAutoReplyMessages();
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+
+        async function loadAutoReplySettings() {
+            try {
+                const response = await fetch(`${API_BASE}/api/settings/auto-reply`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                
+                if (data.success !== false) {
+                    autoReplySettings = data;
+                    
+                    // Update UI
+                    document.getElementById('autoReplyEnabled').checked = data.auto_reply_enabled || false;
+                    document.getElementById('autoReplyMessage').value = data.auto_reply_message || '';
+                    document.getElementById('autoReplyWhen').value = data.auto_reply_when || 'offline';
+                    document.getElementById('autoReplyVoice').value = data.auto_reply_voice || 'sweet';
+                    
+                    // Show/hide options based on toggle
+                    document.getElementById('autoReplyOptions').style.display = data.auto_reply_enabled ? 'block' : 'none';
+                }
+            } catch (e) {
+                console.error('Failed to load auto-reply settings:', e);
+            }
+        }
+
+        async function saveAutoReplySettings() {
+            const enabled = document.getElementById('autoReplyEnabled').checked;
+            
+            // Show/hide options
+            document.getElementById('autoReplyOptions').style.display = enabled ? 'block' : 'none';
+            
+            const settings = {
+                auto_reply_enabled: enabled,
+                auto_reply_message: document.getElementById('autoReplyMessage').value || 'Main abhi busy hoon',
+                auto_reply_when: document.getElementById('autoReplyWhen').value,
+                auto_reply_voice: document.getElementById('autoReplyVoice').value
+            };
+            
+            console.log('📱 Saving auto-reply settings:', settings);
+            
+            const status = document.getElementById('settingsSaveStatus');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/settings/auto-reply`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify(settings)
+                });
+                
+                const data = await response.json();
+                console.log('📱 Save response:', data);
+                
+                if (response.ok && data.success) {
+                    // Show success status
+                    status.textContent = '✓ Settings saved!';
+                    status.style.color = 'var(--success)';
+                    status.style.display = 'block';
+                    setTimeout(() => { status.style.display = 'none'; }, 2000);
+                    
+                    autoReplySettings = settings;
+                } else {
+                    // Show error
+                    status.textContent = '❌ Failed to save: ' + (data.detail || 'Unknown error');
+                    status.style.color = '#ef4444';
+                    status.style.display = 'block';
+                    setTimeout(() => { status.style.display = 'none'; }, 3000);
+                }
+            } catch (e) {
+                console.error('Failed to save auto-reply settings:', e);
+                status.textContent = '❌ Network error: ' + e.message;
+                status.style.color = '#ef4444';
+                status.style.display = 'block';
+                setTimeout(() => { status.style.display = 'none'; }, 3000);
+            }
+        }
+
+        async function updateMyStatus() {
+            const status = document.getElementById('myStatus').value;
+            try {
+                await fetch(`${API_BASE}/api/presence/update`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ status, activity: 'manual_set' })
+                });
+            } catch (e) {
+                console.error('Failed to update status:', e);
+            }
+        }
+
+        async function loadAutoReplyMessages() {
+            const container = document.getElementById('autoReplyMessagesList');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/messages/auto-reply`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                
+                // Update badge
+                const badge = document.getElementById('messagesUnreadBadge');
+                if (data.unread_count > 0) {
+                    badge.textContent = data.unread_count;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+                
+                if (!data.messages || data.messages.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                            No messages yet
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = data.messages.map(msg => `
+                    <div style="padding: 12px; background: ${msg.is_read ? 'var(--surface)' : 'rgba(244,114,182,0.1)'}; border-radius: 12px; margin-bottom: 8px; ${!msg.is_read ? 'border-left: 3px solid var(--primary);' : ''} cursor: pointer;"
+                         onclick="markMessageRead('${msg.id}', this)">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span style="font-weight: 600; color: var(--text-primary);">${msg.caller_name || 'Someone'}</span>
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">${new Date(msg.created_at).toLocaleString()}</span>
+                        </div>
+                        <div style="color: var(--text-secondary); font-size: 0.9rem;">${msg.message}</div>
+                        ${msg.is_urgent ? '<span style="color: var(--error); font-size: 0.75rem;">🔴 Urgent</span>' : ''}
+                    </div>
+                `).join('');
+                
+            } catch (e) {
+                console.error('Failed to load messages:', e);
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                        Failed to load messages
+                    </div>
+                `;
+            }
+        }
+
+        async function markMessageRead(messageId, element) {
+            try {
+                await fetch(`${API_BASE}/api/messages/auto-reply/${messageId}/read`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                
+                // Update UI
+                element.style.background = 'var(--surface)';
+                element.style.borderLeft = 'none';
+                
+                // Refresh badge
+                loadAutoReplyMessages();
+            } catch (e) {
+                console.error('Failed to mark message read:', e);
+            }
         }
         
         // ===== SERVICE WORKER MESSAGE HANDLER =====

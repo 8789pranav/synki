@@ -485,7 +485,10 @@ class DatabaseService:
     
     async def get_user_push_tokens(self, user_id: str) -> list:
         """Get all active push tokens for a user."""
+        logger.info(f"📱 Getting push tokens for user {user_id[:8]}...")
+        
         if not self.is_connected:
+            logger.warning("📱 DB not connected, can't get push tokens")
             return []
         
         try:
@@ -493,9 +496,17 @@ class DatabaseService:
                 'token, platform, device_name, browser'
             ).eq('user_id', user_id).eq('is_active', True).execute()
             
-            return result.data or []
+            tokens = result.data or []
+            logger.info(f"📱 Found {len(tokens)} push token(s) for user {user_id[:8]}...")
+            for t in tokens:
+                logger.info(f"📱   Token: {t.get('token', '')[:30]}... ({t.get('platform')}/{t.get('browser')})")
+            
+            return tokens
         except Exception as e:
-            logger.error(f"Error fetching push tokens: {e}")
+            logger.error(f"📱 ❌ Error fetching push tokens: {e}")
+            import traceback
+            traceback.print_exc()
+        return []
         return []
     
     async def deactivate_push_token(self, token: str) -> bool:

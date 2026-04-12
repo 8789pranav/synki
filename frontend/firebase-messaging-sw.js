@@ -23,7 +23,10 @@ const messaging = firebase.messaging();
 
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
-    console.log('[firebase-messaging-sw.js] Received background message:', payload);
+    console.log('[FCM-SW] ===== BACKGROUND MESSAGE RECEIVED =====');
+    console.log('[FCM-SW] Payload:', JSON.stringify(payload, null, 2));
+    console.log('[FCM-SW] Data:', payload.data);
+    console.log('[FCM-SW] Notification:', payload.notification);
 
     const notificationTitle = payload.notification?.title || 'Synki 💕';
     const notificationOptions = {
@@ -52,12 +55,16 @@ messaging.onBackgroundMessage((payload) => {
         ]
     };
 
+    console.log('[FCM-SW] Showing notification:', notificationTitle);
     return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {
-    console.log('[firebase-messaging-sw.js] Notification click:', event.action);
+    console.log('[FCM-SW] ===== NOTIFICATION CLICKED =====');
+    console.log('[FCM-SW] Action:', event.action);
+    console.log('[FCM-SW] Notification:', event.notification);
+    console.log('[FCM-SW] Data:', event.notification.data);
 
     event.notification.close();
 
@@ -65,12 +72,14 @@ self.addEventListener('notificationclick', (event) => {
     const data = event.notification.data || {};
 
     if (action === 'accept') {
+        console.log('[FCM-SW] User accepted call, call_id:', data.call_id);
         // Open app and auto-connect
         event.waitUntil(
             clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
                 // Check if app is already open
                 for (const client of clientList) {
                     if (client.url.includes('/app.html') && 'focus' in client) {
+                        console.log('[FCM-SW] Focusing existing window');
                         client.focus();
                         // Send message to auto-connect
                         client.postMessage({
@@ -81,18 +90,21 @@ self.addEventListener('notificationclick', (event) => {
                     }
                 }
                 // Open new window with auto-connect parameter
+                console.log('[FCM-SW] Opening new window for call');
                 return clients.openWindow('/app.html?action=accept&call_id=' + (data.call_id || ''));
             })
         );
     } else if (action === 'reject') {
+        console.log('[FCM-SW] User rejected call, call_id:', data.call_id);
         // Optionally notify server about rejection
         if (data.call_id) {
             fetch('/api/calls/' + data.call_id + '/reject', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
-            }).catch(console.error);
+            }).catch(err => console.error('[FCM-SW] Reject error:', err));
         }
     } else {
+        console.log('[FCM-SW] Default click - opening app');
         // Default click - open the app
         event.waitUntil(
             clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
@@ -109,12 +121,17 @@ self.addEventListener('notificationclick', (event) => {
 
 // Handle push event directly (fallback)
 self.addEventListener('push', (event) => {
-    console.log('[firebase-messaging-sw.js] Push event:', event);
+    console.log('[FCM-SW] ===== PUSH EVENT RECEIVED =====');
+    console.log('[FCM-SW] Event:', event);
     
     if (event.data) {
-        const data = event.data.json();
-        console.log('[firebase-messaging-sw.js] Push data:', data);
+        try {
+            const data = event.data.json();
+            console.log('[FCM-SW] Push data (JSON):', JSON.stringify(data, null, 2));
+        } catch (e) {
+            console.log('[FCM-SW] Push data (text):', event.data.text());
+        }
     }
 });
 
-console.log('[firebase-messaging-sw.js] Service worker loaded');
+console.log('[FCM-SW] ✅ Firebase Messaging Service Worker loaded');

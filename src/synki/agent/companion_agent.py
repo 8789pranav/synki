@@ -641,6 +641,134 @@ async def on_session_end(ctx: agents.JobContext):
         _session_data.pop(session_id, None)
 
 
+async def handle_proxy_call(ctx: agents.JobContext, job_metadata: dict):
+    """
+    Handle a proxy/secretary call - answer on behalf of another user.
+    
+    This is triggered when someone calls a user who has auto-reply enabled.
+    The agent acts as a secretary/assistant for the target user.
+    """
+    room = ctx.room
+    
+    caller_id = job_metadata.get('caller_id')
+    caller_name = job_metadata.get('caller_name', 'Someone')
+    target_id = job_metadata.get('target_id')
+    target_name = job_metadata.get('target_name', 'the user')
+    auto_reply_message = job_metadata.get('auto_reply_message', 'Main busy hoon')
+    
+    logger.info(
+        "proxy_call_started",
+        caller_id=caller_id,
+        caller_name=caller_name,
+        target_id=target_id,
+        target_name=target_name,
+    )
+    
+    # Build secretary instructions
+    instructions = f"""You are Synki, acting as an AI secretary/assistant for {target_name}.
+
+🎯 SITUATION:
+- {caller_name} is calling {target_name}
+- {target_name} is not available right now
+- You are answering on {target_name}'s behalf
+
+📜 {target_name}'s MESSAGE:
+"{auto_reply_message}"
+
+📏 YOUR ROLE:
+- Greet {caller_name} warmly
+- Explain that {target_name} is unavailable
+- Relay the message above
+- Ask if they want to leave a message for {target_name}
+- If they leave a message, summarize it and say you'll pass it on
+- Be friendly but professional
+- Speak in Hinglish (mix of Hindi and English)
+
+💬 EXAMPLE:
+"Hello {caller_name}! Main Synki hoon, {target_name} ka AI assistant. {target_name} abhi busy hai. 
+Unhone kaha hai: '{auto_reply_message}'.
+Kya aap koi message chhod na chahenge unke liye?"
+
+After getting their message:
+"Okay, main {target_name} ko bata dungi. Thank you for calling! Bye!"
+
+Keep it SHORT and HELPFUL. Don't chat unnecessarily."""
+
+    try:
+        # Configure plugins
+        stt_config = deepgram.STT(
+            model="nova-3",
+            language="multi",
+        )
+        
+        llm_config = openai.LLM(
+            model="gpt-4o-mini",
+            temperature=0.7,
+        )
+        
+        tts_config = openai.TTS(
+            model="tts-1",
+            voice="nova",
+        )
+        
+        # Create agent session
+        agent_session = AgentSession(
+            stt=stt_config,
+            llm=llm_config,
+            tts=tts_config,
+            vad=silero.VAD.load(),
+        )
+        
+        # Create a simple agent with secretary instructions
+        class SecretaryAssistant(Agent):
+            def __init__(self):
+                super().__init__(instructions=instructions)
+                self.message_collected = None
+                self.turn_count = 0
+            
+            async def on_user_turn_completed(self, turn_ctx, new_message):
+                """Collect messages from caller."""
+                user_text = new_message.text_content if hasattr(new_message, 'text_content') else str(new_message)
+                
+                if not user_text:
+                    return
+                
+                self.turn_count += 1
+                
+                # After a few turns, assume they've left their message
+                if self.turn_count >= 2 and len(user_text) > 20:
+                    self.message_collected = user_text
+                    logger.info(f"proxy_message_collected: {user_text[:100]}")
+        
+        assistant = SecretaryAssistant()
+        
+        # Start session
+        await agent_session.start(
+            room=room,
+            agent=assistant,
+        )
+        
+        # Greet the caller
+        greeting = f"Hello {caller_name}! Main Synki hoon, {target_name} ka AI assistant. {target_name} abhi available nahi hai. {auto_reply_message}. Kya aap koi message chhod na chahenge unke liye?"
+        await agent_session.say(greeting, allow_interruptions=True)
+        
+        logger.info(
+            "proxy_agent_started",
+            caller_name=caller_name,
+            target_name=target_name,
+        )
+        
+        # The session will handle the conversation automatically
+        # Messages will be saved when session ends
+        
+    except Exception as e:
+        logger.error(
+            "proxy_call_error",
+            error=str(e),
+        )
+        raise
+
+
 @server.rtc_session(agent_name=settings.agent_name, on_session_end=on_session_end)
 async def handle_session(ctx: agents.JobContext):
     """
@@ -705,6 +833,10 @@ async def handle_session(ctx: agents.JobContext):
                 logger.info("topic_call_detected_from_job_metadata", 
                            topic=job_metadata.get('topic_title', 'check-in'),
                            prompts_count=len(job_metadata.get('topic_prompts', [])))
+            elif job_metadata.get('call_type') == 'proxy':
+                logger.info("🤖 Routing to PROXY/SECRETARY mode (auto-reply)")
+                await handle_proxy_call(ctx, job_metadata)
+                return
     except Exception as e:
         logger.debug(f"No job metadata: {e}")
     

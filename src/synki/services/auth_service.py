@@ -46,6 +46,7 @@ class AuthService:
         self.supabase = None
         self.supabase_admin = None  # Service role client for admin operations
         self._sessions: Dict[str, AuthSession] = {}  # In-memory session cache
+        self._user_cache: Dict[str, AuthUser] = {}  # In-memory user cache (user_id -> AuthUser)
         self._initialize()
     
     def _initialize(self):
@@ -226,20 +227,31 @@ class AuthService:
             if access_token in self._sessions:
                 session = self._sessions[access_token]
                 if session.expires_at and session.expires_at > datetime.utcnow():
-                    # Get user profile
-                    result = self.supabase.table('profiles')\
-                        .select('*')\
-                        .eq('id', session.user_id)\
-                        .single()\
-                        .execute()
+                    # Try to get user profile (may not exist)
+                    try:
+                        result = self.supabase.table('profiles')\
+                            .select('*')\
+                            .eq('id', session.user_id)\
+                            .execute()
+                        
+                        if result.data and len(result.data) > 0:
+                            profile = result.data[0]
+                            return AuthUser(
+                                id=profile['id'],
+                                email=profile.get('email', ''),
+                                name=profile.get('name', 'Baby'),
+                                is_authenticated=True
+                            )
+                    except Exception:
+                        pass  # Profile might not exist, continue to auth check
                     
-                    if result.data:
-                        return AuthUser(
-                            id=result.data['id'],
-                            email=result.data.get('email', ''),
-                            name=result.data.get('name', 'Baby'),
-                            is_authenticated=True
-                        )
+                    # Profile doesn't exist but session is valid - return basic user
+                    return AuthUser(
+                        id=session.user_id,
+                        email='',
+                        name='Baby',
+                        is_authenticated=True
+                    )
             
             # Verify with Supabase
             user = self.supabase.auth.get_user(access_token)
@@ -250,6 +262,75 @@ class AuthService:
                     name=user.user.user_metadata.get('name', 'Baby'),
                     is_authenticated=True
                 )
+                
+        except Exception as e:
+            logger.error(f"Token verification error: {e}")
+        
+        return None
+    
+    def verify_token_sync(self, access_token: str) -> Optional[AuthUser]:
+        """
+        Synchronous version of verify_token for use with ThreadPoolExecutor.
+        OPTIMIZED: Uses in-memory cache to avoid DB calls on every request.
+        
+        Returns:
+            AuthUser if valid, None otherwise
+        """
+        if not self.is_ready:
+            return None
+        
+        try:
+            # Check session cache first (FAST PATH - no network call!)
+            if access_token in self._sessions:
+                session = self._sessions[access_token]
+                if session.expires_at and session.expires_at > datetime.utcnow():
+                    # Check user cache (no DB call!)
+                    if session.user_id in self._user_cache:
+                        return self._user_cache[session.user_id]
+                    
+                    # Only hit DB if user not in cache
+                    try:
+                        result = self.supabase.table('profiles')\
+                            .select('id, email, name')\
+                            .eq('id', session.user_id)\
+                            .execute()
+                        
+                        if result.data and len(result.data) > 0:
+                            profile = result.data[0]
+                            user = AuthUser(
+                                id=profile['id'],
+                                email=profile.get('email', ''),
+                                name=profile.get('name', 'Baby'),
+                                is_authenticated=True
+                            )
+                            # Cache the user!
+                            self._user_cache[session.user_id] = user
+                            return user
+                    except Exception:
+                        pass
+                    
+                    # Profile doesn't exist but session is valid
+                    user = AuthUser(
+                        id=session.user_id,
+                        email='',
+                        name='Baby',
+                        is_authenticated=True
+                    )
+                    self._user_cache[session.user_id] = user
+                    return user
+            
+            # Verify with Supabase (blocking call - only if not cached)
+            user = self.supabase.auth.get_user(access_token)
+            if user and user.user:
+                auth_user = AuthUser(
+                    id=user.user.id,
+                    email=user.user.email or '',
+                    name=user.user.user_metadata.get('name', 'Baby'),
+                    is_authenticated=True
+                )
+                # Cache the user for future requests!
+                self._user_cache[user.user.id] = auth_user
+                return auth_user
                 
         except Exception as e:
             logger.error(f"Token verification error: {e}")

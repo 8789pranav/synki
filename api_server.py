@@ -38,6 +38,20 @@ logger = logging.getLogger(__name__)
 auth_service = get_auth_service()
 db_service = get_database_service()
 
+# ===== GLOBAL SUPABASE CLIENT (reuse connection pool!) =====
+from supabase import create_client as _create_supabase_client
+_supabase_client = None
+
+def get_supabase():
+    """Get or create global Supabase client (reuses connection pool)."""
+    global _supabase_client
+    if _supabase_client is None:
+        _supabase_client = _create_supabase_client(
+            os.environ.get('SUPABASE_URL'),
+            os.environ.get('SUPABASE_SERVICE_KEY')
+        )
+    return _supabase_client
+
 # Get the directory where api_server.py is located
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
@@ -57,11 +71,7 @@ async def scheduled_calls_checker():
             if pending_calls:
                 logger.info(f"⏰ Found {len(pending_calls)} scheduled calls to trigger")
                 
-                from supabase import create_client
-                supabase = create_client(
-                    os.environ.get('SUPABASE_URL'),
-                    os.environ.get('SUPABASE_SERVICE_KEY')
-                )
+                supabase = get_supabase()  # Use global client!
                 
                 for call in pending_calls:
                     call_id = call['id']
@@ -271,6 +281,12 @@ class SaveChatRequest(BaseModel):
 
 # ==================== AUTH HELPERS ====================
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+# Thread pool for blocking operations
+_executor = ThreadPoolExecutor(max_workers=4)
+
 async def get_current_user(authorization: str = Header(None)) -> Optional[AuthUser]:
     """Get current user from auth header."""
     if not authorization:
@@ -278,9 +294,20 @@ async def get_current_user(authorization: str = Header(None)) -> Optional[AuthUs
     
     try:
         token = authorization.replace("Bearer ", "")
-        user = await auth_service.verify_token(token)
-        return user
-    except:
+        
+        # Run blocking Supabase call in thread pool with timeout
+        loop = asyncio.get_event_loop()
+        try:
+            user = await asyncio.wait_for(
+                loop.run_in_executor(_executor, auth_service.verify_token_sync, token),
+                timeout=5.0  # 5 second timeout
+            )
+            return user
+        except asyncio.TimeoutError:
+            logger.warning("Auth verification timed out")
+            return None
+    except Exception as e:
+        logger.warning(f"Auth error: {e}")
         return None
 
 
@@ -544,11 +571,7 @@ async def get_user_memories(user_id: str, user: AuthUser = Depends(get_current_u
         raise HTTPException(status_code=403, detail="Access denied")
     
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         result = supabase.table('memories').select('*').eq('user_id', user_id).single().execute()
         
@@ -587,11 +610,7 @@ async def get_my_scheduled_calls(user: AuthUser = Depends(get_current_user)):
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         # Get calls FOR the user (self calls)
         self_calls = supabase.table('scheduled_calls').select('*').eq(
@@ -709,11 +728,7 @@ async def cancel_any_scheduled_call(call_id: str, user: AuthUser = Depends(get_c
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         # First check if call exists and user has permission
         call = supabase.table('scheduled_calls').select('*').eq('id', call_id).single().execute()
@@ -1331,11 +1346,7 @@ async def get_call_summary(call_id: str, user: AuthUser = Depends(get_current_us
 async def get_my_synki_code(user: AuthUser = Depends(get_current_user)):
     """Get current user's Synki code."""
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         result = supabase.table('synki_codes').select('code, custom_code').eq(
             'user_id', user.id
@@ -1360,11 +1371,7 @@ async def get_my_synki_code(user: AuthUser = Depends(get_current_user)):
 async def find_user_by_code(code: str, user: AuthUser = Depends(get_current_user)):
     """Find a user by their Synki code."""
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         result = supabase.rpc('find_user_by_code', {'search_code': code}).execute()
         
@@ -1397,11 +1404,7 @@ async def get_connections(
 ):
     """Get all connections for current user."""
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         result = supabase.rpc('get_user_connections', {
             'p_user_id': user.id,
@@ -1439,11 +1442,7 @@ async def send_connection_request(
 ):
     """Send a connection request to another user."""
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         # First, find the target user by code to get their ID
         target_user_result = supabase.rpc('find_user_by_code', {
@@ -1518,11 +1517,7 @@ async def respond_to_connection(
 ):
     """Accept or reject a connection request."""
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         result = supabase.rpc('respond_to_connection', {
             'p_connection_id': connection_id,
@@ -1551,11 +1546,7 @@ async def remove_connection(
 ):
     """Remove a connection."""
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         supabase.table('synki_connections').delete().eq(
             'id', connection_id
@@ -1584,11 +1575,7 @@ async def schedule_call_for_connection(
 ):
     """Schedule a call for a connected user (Synki will call them)."""
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         # Verify connection exists and is accepted
         conn_result = supabase.table('synki_connections').select(
@@ -1713,11 +1700,7 @@ async def update_presence(
 ):
     """Update current user's online status."""
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         # Upsert presence record
         supabase.table('user_presence').upsert({
@@ -1738,11 +1721,7 @@ async def update_presence(
 async def get_my_presence(user: AuthUser = Depends(get_current_user)):
     """Get current user's presence status."""
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         result = supabase.table('user_presence').select('*').eq(
             'user_id', user.id
@@ -1759,11 +1738,7 @@ async def get_my_presence(user: AuthUser = Depends(get_current_user)):
 async def get_connections_presence(user: AuthUser = Depends(get_current_user)):
     """Get online status of all connected users."""
     try:
-        from supabase import create_client
-        supabase = create_client(
-            os.environ.get('SUPABASE_URL'),
-            os.environ.get('SUPABASE_SERVICE_KEY')
-        )
+        supabase = get_supabase()  # Use global client!
         
         # Get all accepted connections
         connections = supabase.rpc('get_user_connections', {
@@ -1816,6 +1791,553 @@ async def get_connections_presence(user: AuthUser = Depends(get_current_user)):
     except Exception as e:
         logger.error(f"Failed to get connections presence: {e}")
         return {"presence": [], "error": str(e)}
+
+
+# ==================== AUTO-REPLY SETTINGS ====================
+
+class AutoReplySettings(BaseModel):
+    auto_reply_enabled: bool = False
+    auto_reply_message: str = "Main abhi busy hoon, please message chhod do"
+    auto_reply_voice: str = "sweet"  # 'sweet', 'professional', 'casual'
+    auto_reply_when: str = "offline"  # 'busy', 'offline', 'always', 'scheduled'
+
+
+@app.get("/api/settings/auto-reply")
+async def get_auto_reply_settings(user: AuthUser = Depends(get_current_user)):
+    """Get user's auto-reply settings."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        supabase = get_supabase()  # Use global client!
+        
+        result = supabase.table('user_settings').select('*').eq('user_id', user.id).single().execute()
+        
+        if result.data:
+            return {
+                "auto_reply_enabled": result.data.get('auto_reply_enabled', False),
+                "auto_reply_message": result.data.get('auto_reply_message', 'Main abhi busy hoon, please message chhod do'),
+                "auto_reply_voice": result.data.get('auto_reply_voice', 'sweet'),
+                "auto_reply_when": result.data.get('auto_reply_when', 'offline'),
+            }
+        
+        # Return defaults if no settings found
+        return {
+            "auto_reply_enabled": False,
+            "auto_reply_message": "Main abhi busy hoon, please message chhod do",
+            "auto_reply_voice": "sweet",
+            "auto_reply_when": "offline",
+        }
+    except Exception as e:
+        logger.error(f"Failed to get auto-reply settings: {e}")
+        return {
+            "auto_reply_enabled": False,
+            "auto_reply_message": "Main abhi busy hoon, please message chhod do",
+            "auto_reply_voice": "sweet",
+            "auto_reply_when": "offline",
+        }
+
+
+@app.put("/api/settings/auto-reply")
+async def update_auto_reply_settings(settings: AutoReplySettings, user: AuthUser = Depends(get_current_user)):
+    """Update user's auto-reply settings."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    logger.info(f"📱 Attempting to save auto-reply settings for user {user.id[:8]}... (enabled: {settings.auto_reply_enabled})")
+    
+    try:
+        supabase = get_supabase()  # Use global client!
+        
+        # Upsert settings
+        data = {
+            'user_id': user.id,
+            'auto_reply_enabled': settings.auto_reply_enabled,
+            'auto_reply_message': settings.auto_reply_message or 'Main abhi busy hoon',
+            'auto_reply_voice': settings.auto_reply_voice or 'sweet',
+            'auto_reply_when': settings.auto_reply_when or 'offline',
+            'updated_at': datetime.now().isoformat(),
+        }
+        
+        logger.info(f"📱 Upserting data: {data}")
+        
+        result = supabase.table('user_settings').upsert(
+            data, 
+            on_conflict='user_id'
+        ).execute()
+        
+        logger.info(f"📱 ✅ Updated auto-reply settings for user {user.id[:8]}... (enabled: {settings.auto_reply_enabled})")
+        logger.info(f"📱 Result: {result.data}")
+        
+        return {"success": True, "settings": data}
+    except Exception as e:
+        logger.error(f"❌ Failed to update auto-reply settings: {e}")
+        logger.exception(e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== P2P DIRECT CALL ====================
+
+class P2PCallRequest(BaseModel):
+    target_user_id: str
+    connection_id: Optional[str] = None
+
+
+@app.post("/api/call/direct/{target_user_id}")
+async def initiate_direct_call(target_user_id: str, user: AuthUser = Depends(get_current_user)):
+    """
+    Initiate a direct P2P call to another Synki user.
+    If they have auto-reply enabled, caller talks to target's AI secretary.
+    """
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    logger.info(f"📞 ==== DIRECT CALL INITIATED ====")
+    logger.info(f"📞 Caller: {user.id[:8]}... -> Target: {target_user_id[:8]}...")
+    
+    from livekit.api import AccessToken, VideoGrants, LiveKitAPI, CreateRoomRequest
+    from livekit.protocol.agent_dispatch import CreateAgentDispatchRequest
+    
+    api_key = os.getenv('LIVEKIT_API_KEY')
+    api_secret = os.getenv('LIVEKIT_API_SECRET')
+    livekit_url = os.getenv('LIVEKIT_URL', 'wss://zupki-hv3uw8fv.livekit.cloud')
+    
+    try:
+        supabase = get_supabase()  # Use global client!
+        
+        # Check if users are connected (check both directions)
+        try:
+            conn1 = supabase.table('synki_connections').select('id').eq('user_id', user.id).eq('connected_user_id', target_user_id).eq('status', 'accepted').execute()
+            conn2 = supabase.table('synki_connections').select('id').eq('user_id', target_user_id).eq('connected_user_id', user.id).eq('status', 'accepted').execute()
+            
+            if not (conn1.data or conn2.data):
+                raise HTTPException(status_code=403, detail="You must be connected to call this user")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Connection check failed: {e}, allowing call anyway")
+            # Allow call if connection check fails (table might not exist)
+        
+        # Get target user's info and settings
+        target_name = 'Friend'
+        try:
+            target_profile = supabase.table('profiles').select('name').eq('id', target_user_id).execute()
+            if target_profile.data:
+                target_name = target_profile.data[0].get('name', 'Friend')
+        except Exception as e:
+            logger.warning(f"Could not get target profile: {e}")
+        
+        # Get caller info
+        caller_name = 'Someone'
+        try:
+            caller_profile = supabase.table('profiles').select('name').eq('id', user.id).execute()
+            if caller_profile.data:
+                caller_name = caller_profile.data[0].get('name', 'Someone')
+        except Exception as e:
+            logger.warning(f"Could not get caller profile: {e}")
+        
+        # Check target's auto-reply settings
+        auto_reply_enabled = False
+        auto_reply_when = 'offline'
+        auto_reply_message = 'Main busy hoon'
+        try:
+            settings_result = supabase.table('user_settings').select('*').eq('user_id', target_user_id).execute()
+            logger.info(f"📞 Auto-reply settings for {target_user_id[:8]}...: {settings_result.data}")
+            if settings_result.data:
+                target_settings = settings_result.data[0]
+                auto_reply_enabled = target_settings.get('auto_reply_enabled', False)
+                auto_reply_when = target_settings.get('auto_reply_when', 'offline')
+                auto_reply_message = target_settings.get('auto_reply_message', 'Main busy hoon')
+                logger.info(f"📞 Auto-reply enabled: {auto_reply_enabled}, when: {auto_reply_when}, message: {auto_reply_message[:50]}...")
+            else:
+                logger.info(f"📞 No auto-reply settings found for {target_user_id[:8]}...")
+        except Exception as e:
+            logger.warning(f"Could not check auto-reply settings: {e}")
+        
+        # Check if target is online
+        target_online = False
+        try:
+            presence_result = supabase.table('user_presence').select('status, last_seen').eq('user_id', target_user_id).execute()
+            if presence_result.data:
+                last_seen = presence_result.data[0].get('last_seen')
+                if last_seen:
+                    try:
+                        last_seen_dt = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+                        target_online = (datetime.now(last_seen_dt.tzinfo) - last_seen_dt).total_seconds() < 120
+                    except:
+                        pass
+        except Exception as e:
+            logger.warning(f"Could not check presence: {e}")
+            # Assume offline if presence check fails
+        
+        # Determine if auto-reply should be triggered
+        use_auto_reply = False
+        if auto_reply_enabled:
+            if auto_reply_when == 'always':
+                use_auto_reply = True
+                logger.info(f"📞 Auto-reply TRIGGERED: always mode")
+            elif auto_reply_when == 'offline' and not target_online:
+                use_auto_reply = True
+                logger.info(f"📞 Auto-reply TRIGGERED: offline mode (target is offline)")
+            elif auto_reply_when == 'offline' and target_online:
+                logger.info(f"📞 Auto-reply NOT triggered: offline mode but target is ONLINE")
+            elif auto_reply_when == 'busy':
+                # Check if user is in a call (could check active rooms)
+                use_auto_reply = not target_online  # Fallback to offline check
+                if use_auto_reply:
+                    logger.info(f"📞 Auto-reply TRIGGERED: busy mode")
+        else:
+            logger.info(f"📞 Auto-reply disabled for {target_name}")
+        
+        # Create room for the call
+        room_name = f"p2p-{user.id[:8]}-{target_user_id[:8]}-{int(datetime.now().timestamp())}"
+        
+        # Create LiveKit API client
+        lk_api = LiveKitAPI(
+            url=livekit_url.replace('wss://', 'https://'),
+            api_key=api_key,
+            api_secret=api_secret,
+        )
+        
+        call_type = 'proxy' if use_auto_reply else 'p2p'
+        room_metadata = json.dumps({
+            "call_type": call_type,
+            "caller_id": user.id,
+            "caller_name": caller_name,
+            "target_id": target_user_id,
+            "target_name": target_name,
+        })
+        
+        await lk_api.room.create_room(
+            CreateRoomRequest(
+                name=room_name,
+                empty_timeout=300,
+                metadata=room_metadata,
+            )
+        )
+        
+        if use_auto_reply:
+            # Dispatch proxy agent to answer on behalf of target
+            job_metadata = {
+                "call_type": "proxy",
+                "caller_id": user.id,
+                "caller_name": caller_name,
+                "target_id": target_user_id,
+                "target_name": target_name,
+                "auto_reply_message": auto_reply_message,
+            }
+            
+            dispatch = await lk_api.agent_dispatch.create_dispatch(
+                CreateAgentDispatchRequest(
+                    room=room_name,
+                    agent_name="synki-companion",
+                    metadata=json.dumps(job_metadata),
+                )
+            )
+            logger.info(f"📞 Auto-reply call: {caller_name} -> {target_name}'s AI secretary")
+        else:
+            # TODO: Send notification to target user to join call
+            # For now, dispatch agent anyway but in "ringing" mode
+            logger.info(f"📞 Direct call: {caller_name} -> {target_name} (target is online)")
+        
+        await lk_api.aclose()
+        
+        # Create token for caller
+        token = AccessToken(api_key, api_secret) \
+            .with_identity(user.id) \
+            .with_name(caller_name) \
+            .with_grants(VideoGrants(
+                room_join=True,
+                room=room_name
+            ))
+        
+        # Store incoming call for target user (if not auto-reply)
+        if not use_auto_reply:
+            try:
+                # Store in pending_calls table - use UTC time to match check_incoming_calls
+                call_created_at = datetime.utcnow().isoformat() + 'Z'
+                supabase.table('pending_calls').insert({
+                    'id': room_name,
+                    'caller_id': user.id,
+                    'caller_name': caller_name,
+                    'target_id': target_user_id,
+                    'room_name': room_name,
+                    'status': 'ringing',
+                    'created_at': call_created_at
+                }).execute()
+                logger.info(f"📞 ✅ CALL STORED: {caller_name} -> {target_name}, room={room_name}, created_at={call_created_at}")
+                
+                # Send push notification to target user
+                try:
+                    from synki.services.push_service import push_service
+                    
+                    tokens = await db_service.get_user_push_tokens(target_user_id)
+                    if tokens:
+                        for token_info in tokens:
+                            await push_service.send_call_notification(
+                                token=token_info['token'],
+                                caller_name=caller_name,
+                                message=f"📞 {caller_name} is calling you!",
+                                call_id=room_name
+                            )
+                        logger.info(f"📲 Sent P2P call notification to {target_name} ({len(tokens)} devices)")
+                    else:
+                        logger.warning(f"📵 No push tokens for {target_name}")
+                except Exception as push_err:
+                    logger.warning(f"Failed to send P2P call push notification: {push_err}")
+                    
+            except Exception as e:
+                logger.warning(f"Could not store pending call: {e}")
+        
+        return {
+            "success": True,
+            "token": token.to_jwt(),
+            "room_name": room_name,
+            "url": livekit_url,
+            "call_type": call_type,
+            "target_name": target_name,
+            "auto_reply": use_auto_reply,
+            "message": f"Calling {target_name}..." if not use_auto_reply else f"{target_name} is unavailable. You're talking to their AI secretary."
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to initiate P2P call: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== INCOMING CALL ENDPOINTS =====
+
+@app.get("/api/calls/incoming")
+async def check_incoming_calls(user: AuthUser = Depends(get_current_user)):
+    """Check if there are any incoming calls for this user."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        supabase = get_supabase()  # Use global client!
+        
+        # Clean up stale calls (older than 90 seconds) - prevents ghost calls
+        try:
+            from datetime import timedelta
+            cutoff = (datetime.utcnow() - timedelta(seconds=90)).isoformat() + 'Z'
+            supabase.table('pending_calls').update({'status': 'missed'}).eq('target_id', user.id).eq('status', 'ringing').lt('created_at', cutoff).execute()
+        except Exception:
+            pass  # Cleanup is best-effort
+        
+        # Get pending calls for this user
+        result = supabase.table('pending_calls').select('*').eq('target_id', user.id).eq('status', 'ringing').order('created_at', desc=True).limit(1).execute()
+        
+        # Debug logging
+        if result.data:
+            logger.info(f"📞 Found {len(result.data)} ringing call(s) for user {user.id[:8]}...")
+        
+        if result.data:
+            call = result.data[0]
+            # Check if call is still valid (less than 90 seconds old - extended from 60)
+            try:
+                created = datetime.fromisoformat(call['created_at'].replace('Z', '+00:00'))
+                now = datetime.now(created.tzinfo)
+                age = (now - created).total_seconds()
+                logger.info(f"📞 Call age: {age:.1f}s, caller: {call['caller_name']}")
+            except Exception as e:
+                age = 0  # If parsing fails, assume valid
+                logger.warning(f"📞 Could not parse created_at: {e}")
+            
+            if age < 90:  # Extended to 90 seconds
+                logger.info(f"📞 ✅ Returning incoming call from {call['caller_name']}")
+                return {
+                    "has_incoming_call": True,
+                    "call": {
+                        "id": call['id'],
+                        "caller_id": call['caller_id'],
+                        "caller_name": call['caller_name'],
+                        "caller_avatar": "👤",
+                        "room_name": call['room_name'],
+                        "created_at": call['created_at']
+                    }
+                }
+            else:
+                # Mark as missed
+                supabase.table('pending_calls').update({'status': 'missed'}).eq('id', call['id']).execute()
+        
+        return {"has_incoming_call": False, "call": None}
+        
+    except Exception as e:
+        logger.warning(f"Check incoming calls error: {e}")
+        return {"has_incoming_call": False, "call": None}
+
+
+@app.post("/api/calls/accept/{call_id}")
+async def accept_incoming_call(call_id: str, user: AuthUser = Depends(get_current_user)):
+    """Accept an incoming call and get token to join the room."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    from livekit.api import AccessToken, VideoGrants
+    
+    api_key = os.getenv('LIVEKIT_API_KEY')
+    api_secret = os.getenv('LIVEKIT_API_SECRET')
+    livekit_url = os.getenv('LIVEKIT_URL', 'wss://zupki-hv3uw8fv.livekit.cloud')
+    
+    try:
+        supabase = get_supabase()  # Use global client!
+        
+        # Get the call
+        result = supabase.table('pending_calls').select('*').eq('id', call_id).eq('target_id', user.id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Call not found")
+        
+        call = result.data[0]
+        room_name = call['room_name']
+        
+        # Mark as answered
+        supabase.table('pending_calls').update({
+            'status': 'answered',
+            'answered_at': datetime.now().isoformat()
+        }).eq('id', call_id).execute()
+        
+        # Get user's name
+        user_name = 'Friend'
+        try:
+            profile = supabase.table('profiles').select('name').eq('id', user.id).execute()
+            if profile.data:
+                user_name = profile.data[0].get('name', 'Friend')
+        except:
+            pass
+        
+        # Create token for callee
+        token = AccessToken(api_key, api_secret) \
+            .with_identity(user.id) \
+            .with_name(user_name) \
+            .with_grants(VideoGrants(
+                room_join=True,
+                room=room_name
+            ))
+        
+        logger.info(f"📞 Call accepted: {call['caller_name']} -> {user_name}")
+        
+        return {
+            "success": True,
+            "token": token.to_jwt(),
+            "room_name": room_name,
+            "url": livekit_url,
+            "caller_name": call['caller_name']
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Accept call error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/calls/decline/{call_id}")
+async def decline_incoming_call(call_id: str, user: AuthUser = Depends(get_current_user)):
+    """Decline an incoming call."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        supabase = get_supabase()  # Use global client!
+        
+        # Mark as declined
+        supabase.table('pending_calls').update({
+            'status': 'declined'
+        }).eq('id', call_id).eq('target_id', user.id).execute()
+        
+        logger.info(f"📞 Call declined: {call_id}")
+        
+        return {"success": True}
+        
+    except Exception as e:
+        logger.warning(f"Decline call error: {e}")
+        return {"success": True}
+
+
+@app.post("/api/calls/cancel/{call_id}")
+async def cancel_outgoing_call(call_id: str, user: AuthUser = Depends(get_current_user)):
+    """Cancel an outgoing call (caller hung up before callee answered)."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        supabase = get_supabase()  # Use global client!
+        
+        # Cancel the call (caller is the one who initiated)
+        supabase.table('pending_calls').update({
+            'status': 'cancelled'
+        }).eq('id', call_id).eq('caller_id', user.id).execute()
+        
+        logger.info(f"📞 Call cancelled by caller: {call_id}")
+        
+        return {"success": True}
+        
+    except Exception as e:
+        logger.warning(f"Cancel call error: {e}")
+        return {"success": True}
+
+
+@app.get("/api/calls/status/{room_name}")
+async def get_call_status(room_name: str, user: AuthUser = Depends(get_current_user)):
+    """Check the status of a call (for caller to know if it was answered/declined)."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        supabase = get_supabase()  # Use global client!
+        
+        result = supabase.table('pending_calls').select('status').eq('id', room_name).execute()
+        
+        if result.data:
+            return {"status": result.data[0]['status']}
+        
+        return {"status": "unknown"}
+        
+    except Exception as e:
+        logger.warning(f"Call status check error: {e}")
+        return {"status": "unknown"}
+
+
+@app.get("/api/messages/auto-reply")
+async def get_auto_reply_messages(user: AuthUser = Depends(get_current_user)):
+    """Get messages left by callers via auto-reply."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        supabase = get_supabase()  # Use global client!
+        
+        result = supabase.table('auto_reply_messages').select('*').eq('user_id', user.id).order('created_at', desc=True).limit(50).execute()
+        
+        return {"messages": result.data or [], "unread_count": len([m for m in (result.data or []) if not m.get('is_read')])}
+    except Exception as e:
+        logger.error(f"Failed to get auto-reply messages: {e}")
+        return {"messages": [], "unread_count": 0}
+
+
+@app.post("/api/messages/auto-reply/{message_id}/read")
+async def mark_message_read(message_id: str, user: AuthUser = Depends(get_current_user)):
+    """Mark an auto-reply message as read."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        supabase = get_supabase()  # Use global client!
+        
+        supabase.table('auto_reply_messages').update({
+            'is_read': True,
+            'read_at': datetime.now().isoformat()
+        }).eq('id', message_id).eq('user_id', user.id).execute()
+        
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Failed to mark message read: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==================== RUN ====================
