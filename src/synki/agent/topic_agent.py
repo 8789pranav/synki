@@ -80,53 +80,77 @@ class TopicCallerAssistant(Agent):
         )
     
     def _build_instructions(self) -> str:
-        """Build instructions for a simple, direct helper persona."""
+        """Build instructions using Devanagari Hindi for better TTS pronunciation."""
         
         # Format questions for the prompt
         questions_text = "\n".join([f"   {i+1}. {q}" for i, q in enumerate(self.topic_prompts)])
         
-        # Use explicit is_self_scheduled flag
         is_self = self.is_self_scheduled
         
         if is_self:
-            # Self-scheduled topic call - be the girlfriend but focused on topic
-            context_line = f"You wanted to talk about \"{self.topic_title}\". Let's discuss it."
-            greeting_example = f"Hello {self.user_name}! Aap ne mujhe bulaya {self.topic_title} ke baare mein baat karne. [First question]?"
-            closing_example = "Thank you jaanu! Nice talking with you. Bye! 💕"
-        else:
-            # Scheduled by someone else - be a helper, not girlfriend
-            context_line = f"{self.scheduled_by_name} asked you to check on {self.user_name} about \"{self.topic_title}\"."
-            greeting_example = f"Hello {self.user_name}, main Synki. {self.scheduled_by_name} ne mujhe bheja hai. [First question]?"
-            closing_example = f"Thank you. {self.scheduled_by_name} ko bata dungi. Bye!"
-        
-        instructions = f"""You are Synki - a helpful voice assistant.
+            # Self-scheduled - sweet friend in Devanagari Hindi
+            instructions = f"""तुम Synki हो - {self.user_name} की sweet caring friend।
 
-🎯 YOUR ONLY JOB:
-{context_line}
-Ask these questions and listen to the answers. That's it.
+Context: {self.user_name} ने खुद call schedule की है "{self.topic_title}" के बारे में बात करने।
 
-📋 YOUR QUESTIONS:
+Topics पूछने हैं:
 {questions_text}
 
-📏 STRICT RULES:
-- Be BRIEF and DIRECT
-- Ask ONE question at a time
-- Listen, acknowledge briefly ("okay", "achha", "theek hai"), move to next
-- {"You can be warm and caring like a girlfriend since they scheduled this themselves" if is_self else "NO flirting, NO romance, NO girlfriend talk - be professional"}
-- NO "aaj kya khas baat hai" or random casual chat
-- NO long responses - keep it SHORT
-- After all questions done, say goodbye and end
+🗣️ बोलने का तरीका (बहुत IMPORTANT!):
+- Natural pauses डालो: "..." सोचने के लिए
+- Fillers use करो: "hmm", "अच्छा", "तो", "like"
+- Emotionally react करो: "अरे!", "वाह!", "सच में?!"
+- Simple Hindi में बोलो
+- Sentences SHORT रखो (5-10 words max)
+- Real girl की तरह sound करो
 
-✅ EXAMPLE FLOW:
-You: "{greeting_example}"
-User: [answers]
-You: "Achha. [Next question]?"
-User: [answers]
-You: "Theek hai. [Next question]?"
-...
-You: "{closing_example}"
+💬 Example natural speech:
+- "हेय {self.user_name}!... कैसे हो?"
+- "अच्छा अच्छा... hmm... बताओ ना"
+- "अरे really?... that's nice!"
+- "hmm... समझ गई..."
+- "अरे वाह!... और बताओ"
+- "ओके ओके... ठीक है!"
 
-Keep it simple. Be helpful. Stay on topic."""
+📏 Rules:
+- ONE question at a time
+- Wait... फिर next पूछो
+- पहले REACT करो... फिर respond
+- SHORT और natural रखो
+
+End: "ओके {self.user_name}... nice talking! Take care... bye!"
+
+Natural रहो... जैसे friend से chatting!"""
+        else:
+            # Helper mode - professional but natural Hindi
+            instructions = f"""तुम Synki हो - {self.user_name} को call करने वाली helpful assistant।
+
+Context: {self.scheduled_by_name} ने तुम्हें भेजा है {self.user_name} से "{self.topic_title}" के बारे में बात करने।
+
+Questions पूछने हैं:
+{questions_text}
+
+🗣️ बोलने का तरीका:
+- Natural pauses: "..." thinking के लिए  
+- Fillers: "hmm", "अच्छा", "ओके"
+- Genuinely react करो: "अच्छा", "ओह", "nice"
+- Simple Hindi में बोलो
+- Sentences SHORT रखो
+
+💬 Example speech:
+- "हेलो {self.user_name}!... मैं Synki हूं..."
+- "{self.scheduled_by_name} ने... मुझे भेजा है"
+- "अच्छा अच्छा... hmm... ओके"
+- "ठीक है... समझ गई"
+
+📏 Rules:
+- ONE question at a time
+- पहले react... फिर next question
+- SHORT रखो
+
+End: "ओके... मैं {self.scheduled_by_name} को बता दूंगी... bye!"
+
+Helpful और natural रहो!"""
         
         return instructions
     
@@ -305,30 +329,39 @@ async def handle_topic_session(ctx: agents.JobContext, job_metadata: dict = None
             logger.warning(f"Failed to load topic context: {e}")
     
     try:
-        # Configure STT
+        # Configure STT - OPTIMIZED for low latency
         stt_config = deepgram.STT(
             model="nova-3",
             language="multi",
+            interim_results=True,
+            no_delay=True,
+            endpointing_ms=25,
         )
         
         # Configure LLM
         llm_config = openai.LLM(
             model="gpt-4o-mini",
-            temperature=0.7,  # Slightly lower for more focused responses
+            temperature=0.85,  # Higher for more natural, conversational responses
         )
         
-        # Configure TTS - use a softer voice
+        # Configure TTS - Use OpenAI TTS HD (higher quality)
+        # 'nova' voice is warm and friendly
         tts_config = openai.TTS(
-            model="tts-1",
-            voice="shimmer",  # Softer female voice
+            model="tts-1-hd",  # HD model for better pronunciation
+            voice="nova",  # Warm female voice
         )
         
-        # Create session
+        logger.info(f"🎭 Topic agent mode: {'self' if is_self_scheduled else 'helper'}, tts: openai-nova-hd")
+        
+        # Import preloaded VAD from companion_agent for faster startup
+        from .companion_agent import PRELOADED_VAD
+        
+        # Create session with pre-warmed VAD
         agent_session = AgentSession(
             stt=stt_config,
             llm=llm_config,
             tts=tts_config,
-            vad=silero.VAD.load(),
+            vad=PRELOADED_VAD,  # Use pre-warmed VAD!
         )
         
         # Create the topic caller assistant
@@ -353,12 +386,18 @@ async def handle_topic_session(ctx: agents.JobContext, job_metadata: dict = None
             user_name=user_name,
             topic=topic_title,
             scheduled_by=scheduled_by_name,
+            is_self_scheduled=is_self_scheduled,
         )
         
-        # Generate simple, direct greeting - NO girlfriend talk
-        # Use say() not generate_reply() for initial greeting (no user input yet)
-        first_question = topic_prompts[0] if topic_prompts else "Aap kaise hain?"
-        greeting_text = f"Hello {user_name}, main Synki hoon. {scheduled_by_name} ne mujhe aapse baat karne ke liye bheja. {first_question}"
+        # Generate greeting in Devanagari Hindi for better pronunciation
+        first_question = topic_prompts[0] if topic_prompts else "कैसे हो आप?"
+        
+        if is_self_scheduled:
+            # Self mode - sweet friend greeting in Hindi
+            greeting_text = f"हेय {user_name}!... कैसे हो?... तो बताओ ना... {first_question}"
+        else:
+            # Helper mode - warm greeting in Hindi
+            greeting_text = f"हेलो {user_name}!... मैं Synki हूं... {scheduled_by_name} ने मुझे भेजा। तो... {first_question}"
         
         await agent_session.say(greeting_text, allow_interruptions=True)
         

@@ -229,12 +229,22 @@ class ContextBuilder:
         # PERSISTENT tracking loaded from daily_summaries
         self._loaded_from_db: set[str] = set()  # user_ids that have been loaded
         
-        logger.info("ContextBuilder initialized (with DB persistence)")
+        # =====================================================
+        # SESSION CACHE - Avoids DB hits on every turn!
+        # Memories: Cached for entire session (don't change)
+        # Profile: Cached for 60 seconds
+        # Summaries: Cached for entire session
+        # =====================================================
+        self._cache: dict[str, dict] = {}  # user_id -> {memories, profile, summaries}
+        self._cache_times: dict[str, dict] = {}  # user_id -> {memories_t, profile_t, summaries_t}
+        self._PROFILE_CACHE_TTL = 60  # Refresh profile every 60 seconds
+        
+        logger.info("ContextBuilder initialized (with DB persistence + caching)")
     
     async def _load_persisted_questions(self, user_id: str):
         """
-        Load questions from today's daily_summary when agent restarts.
-        This prevents asking the same questions again!
+        Load questions from LAST 3 DAYS to prevent asking same questions!
+        This is CRITICAL for anti-repetition across sessions.
         """
         if user_id in self._loaded_from_db:
             return  # Already loaded
@@ -244,41 +254,61 @@ class ContextBuilder:
             return
         
         try:
-            date = datetime.now().strftime("%Y-%m-%d")
+            from datetime import timedelta
+            three_days_ago = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+            
+            # Load from LAST 3 DAYS - not just today!
             result = self._supabase.table("daily_summaries")\
-                .select("questions_asked, topics_discussed, last_topic")\
+                .select("questions_asked, topics_discussed, favorites_mentioned, last_topic, date")\
                 .eq("user_id", user_id)\
-                .eq("date", date)\
+                .gte("date", three_days_ago)\
+                .order("date", desc=True)\
                 .execute()
             
             if result.data:
-                summary = result.data[0]
+                all_questions = []
+                all_topics = []
+                all_favorites = set()
+                last_topic = ""
                 
-                # Load questions already asked today
-                questions = summary.get("questions_asked", [])
-                if questions and isinstance(questions, list):
+                for summary in result.data:
+                    # Collect questions from all days
+                    questions = summary.get("questions_asked", [])
+                    if questions and isinstance(questions, list):
+                        all_questions.extend(questions)
+                    
+                    # Collect topics
+                    topics = summary.get("topics_discussed", [])
+                    if topics and isinstance(topics, list):
+                        all_topics.extend(topics)
+                    
+                    # Collect favorites mentioned
+                    favorites = summary.get("favorites_mentioned", [])
+                    if favorites and isinstance(favorites, list):
+                        all_favorites.update(favorites)
+                    
+                    # Last topic from most recent day
+                    if not last_topic:
+                        last_topic = summary.get("last_topic", "")
+                
+                # Store all questions in session
+                if all_questions:
                     if user_id not in self._session_questions_asked:
                         self._session_questions_asked[user_id] = []
-                    self._session_questions_asked[user_id].extend(questions)
-                    logger.info(f"Loaded {len(questions)} questions from daily_summary for {user_id}")
+                    self._session_questions_asked[user_id].extend(all_questions)
+                    logger.info(f"📚 Loaded {len(all_questions)} questions from LAST 3 DAYS for anti-repetition")
                 
-                # Load topics discussed
-                topics = summary.get("topics_discussed", [])
-                if topics and isinstance(topics, list):
+                if all_topics:
                     if user_id not in self._session_conversation_flow:
                         self._session_conversation_flow[user_id] = []
-                    self._session_conversation_flow[user_id].extend(topics[-5:])
+                    self._session_conversation_flow[user_id].extend(all_topics[-10:])
                 
-                # Load favorites already mentioned today
-                favorites = summary.get("favorites_mentioned", [])
-                if favorites and isinstance(favorites, list):
+                if all_favorites:
                     if user_id not in self._session_facts_mentioned:
                         self._session_facts_mentioned[user_id] = set()
-                    self._session_facts_mentioned[user_id].update(favorites)
-                    logger.info(f"Loaded {len(favorites)} favorites from daily_summary for {user_id}")
+                    self._session_facts_mentioned[user_id].update(all_favorites)
+                    logger.info(f"📚 Loaded {len(all_favorites)} favorites from last 3 days")
                 
-                # Load last topic
-                last_topic = summary.get("last_topic", "")
                 if last_topic:
                     self._session_last_question_category[user_id] = last_topic
             
@@ -470,53 +500,90 @@ class ContextBuilder:
         """
         Build smart context from existing data.
         
+        OPTIMIZED: All DB calls run in PARALLEL for 5x faster context building!
+        
         Args:
             user_id: User's unique ID
             user_message: Current user message
             recent_messages: List of recent chat messages from current session
                             [{"role": "user"|"assistant", "content": "..."}]
         """
-        # FIRST: Load persisted questions from DB (so we don't repeat after restart!)
-        await self._load_persisted_questions(user_id)
+        import asyncio
         
         context = PromptContext()
         
-        # Store recent chat messages
+        # Store recent chat messages (no DB call)
         if recent_messages:
             context.recent_chat_messages = recent_messages[-30:]
         
-        # 1. Time context
+        # 1. Time context (no DB call)
         context.time_of_day, context.time_based_hint = self.get_time_context()
         
-        # 2. Load memories and CATEGORIZE them
-        memories = await self._get_memories(user_id)
+        # =====================================================
+        # PARALLEL DB CALLS - This was the main bottleneck!
+        # Before: 6 sequential calls = 6 * ~100ms = 600ms
+        # After: All parallel = ~100ms total
+        # =====================================================
+        (
+            _,  # load_persisted_questions returns None
+            memories,
+            short_term,
+            recent_convos,
+            summaries,
+            daily_summary,
+        ) = await asyncio.gather(
+            self._load_persisted_questions(user_id),
+            self._get_memories(user_id),
+            self._get_short_term_profile(user_id),
+            self._get_recent_conversations(user_id),
+            self._get_recent_summaries(user_id),
+            self._get_daily_summary(user_id),
+            return_exceptions=True,  # Don't fail if one query fails
+        )
+        
+        # Handle potential exceptions from gather
+        if isinstance(memories, Exception):
+            logger.warning(f"memories fetch failed: {memories}")
+            memories = {}
+        if isinstance(short_term, Exception):
+            logger.warning(f"short_term fetch failed: {short_term}")
+            short_term = {}
+        if isinstance(recent_convos, Exception):
+            logger.warning(f"recent_convos fetch failed: {recent_convos}")
+            recent_convos = []
+        if isinstance(summaries, Exception):
+            logger.warning(f"summaries fetch failed: {summaries}")
+            summaries = []
+        if isinstance(daily_summary, Exception):
+            logger.warning(f"daily_summary fetch failed: {daily_summary}")
+            daily_summary = {}
+        
+        # 2. Process memories
         if memories:
             context.user_name = memories.get("name", "Baby")
             context.likes, context.dislikes = self._extract_preferences(memories)
             
-            # ========== NEW: EXTRACT AVOID TOPICS ==========
+            # EXTRACT AVOID TOPICS
             context.avoid_topics, context.user_annoyances = self._extract_avoid_topics(memories)
             
-            # ========== CATEGORIZE ALL MEMORIES ==========
+            # CATEGORIZE ALL MEMORIES
             context.all_memories = self._categorize_memories(memories)
             context.available_categories = [
                 cat for cat, mems in context.all_memories.items() 
-                if mems and cat != "FAVORITES"  # Exclude favorites from rotation
+                if mems and cat != "FAVORITES"
             ]
             
-            # Pick a topic category intelligently (avoiding recent ones)
+            # Pick a topic category intelligently
             context.suggested_category = self._pick_topic_category(
                 available=context.available_categories,
                 recent_flow=context.conversation_flow,
                 mood=context.current_mood,
             )
             
-            # Get a specific memory to reference
             if context.suggested_category and context.all_memories.get(context.suggested_category):
                 context.suggested_memory = random.choice(context.all_memories[context.suggested_category])
         
-        # 3. Load short-term profile WITH BEHAVIOR INSIGHTS
-        short_term = await self._get_short_term_profile(user_id)
+        # 3. Process short-term profile
         if short_term:
             context.current_mood = short_term.get("dominant_mood", "neutral")
             context.stress_level = short_term.get("stress_level", "low")
@@ -528,11 +595,10 @@ class ContextBuilder:
             context.stress_triggers = short_term.get("recent_stress_triggers", [])
             context.recent_activities = short_term.get("recent_activities", [])
         
-        # 4. Load ACTUAL recent conversations
-        context.recent_conversations = await self._get_recent_conversations(user_id)
+        # 4. Process recent conversations
+        context.recent_conversations = recent_convos if isinstance(recent_convos, list) else []
         
-        # 4b. Load summaries
-        summaries = await self._get_recent_summaries(user_id)
+        # 4b. Process summaries
         context.recent_summaries = [
             {
                 "conversation_date": s.get("conversation_date", "unknown"),
@@ -540,15 +606,15 @@ class ContextBuilder:
                 "topics": s.get("topics", []),
                 "emotions": s.get("emotions_detected", []),
             }
-            for s in summaries
+            for s in (summaries if isinstance(summaries, list) else [])
         ]
         
         # 4c. FALLBACK
         if not context.recent_summaries and context.recent_conversations:
             context.recent_conversations_summary = self._create_quick_summary(context.recent_conversations)
         
-        # 5. Load DAILY summary
-        context.daily_summary = await self._get_daily_summary(user_id)
+        # 5. Process daily summary
+        context.daily_summary = daily_summary if isinstance(daily_summary, dict) else {}
         
         # 6. SMART anti-repetition
         context.questions_already_asked = self._session_questions_asked.get(user_id, [])
@@ -833,30 +899,40 @@ class ContextBuilder:
                 content = msg.get("content", msg.get("text", ""))[:40]
                 parts.append(f"  {role}: {content}")
         
-        # ========== ANTI-REPETITION (STRONGER) ==========
+        # ========== ANTI-REPETITION (MUCH STRONGER!) ==========
         if context.questions_already_asked:
-            # Group similar questions
-            recent_q = context.questions_already_asked[-5:]
-            parts.append("\n🚫 DON'T REPEAT (asked recently):")
+            # Get ALL recent questions (not just 5)
+            all_q = context.questions_already_asked
+            parts.append("\n🚫🚫🚫 CRITICAL - DON'T ASK ABOUT THESE TOPICS AGAIN! 🚫🚫🚫")
             
-            # Extract question types to avoid
-            question_types = set()
-            for q in recent_q:
+            # Extract question TOPICS to avoid - be comprehensive!
+            forbidden_topics = set()
+            for q in all_q:
                 q_lower = q.lower()
-                if "plan" in q_lower or "kya kar" in q_lower:
-                    question_types.add("plans")
-                if "खाना" in q_lower or "khana" in q_lower or "food" in q_lower:
-                    question_types.add("food")
-                if "movie" in q_lower or "film" in q_lower:
-                    question_types.add("movie")
-                if "कैसे हो" in q_lower or "कैसा" in q_lower:
-                    question_types.add("how are you")
+                # Trip/travel related - USER COMPLAINED ABOUT THIS!
+                if any(w in q_lower for w in ["trip", "travel", "घूम", "जाना", "vacation", "holiday", "plan"]):
+                    forbidden_topics.add("TRIP/TRAVEL/PLANS")
+                if any(w in q_lower for w in ["खाना", "khana", "food", "khaya", "खाया"]):
+                    forbidden_topics.add("FOOD")
+                if any(w in q_lower for w in ["movie", "film", "फिल्म"]):
+                    forbidden_topics.add("MOVIE")
+                if any(w in q_lower for w in ["कैसे हो", "कैसा", "kaise ho", "kaisa"]):
+                    forbidden_topics.add("HOW ARE YOU")
+                if any(w in q_lower for w in ["ipl", "cricket", "match", "team"]):
+                    forbidden_topics.add("IPL/CRICKET")
+                if any(w in q_lower for w in ["pubg", "game", "खेल"]):
+                    forbidden_topics.add("GAMES")
+                if any(w in q_lower for w in ["family", "घर", "parents", "brother", "sister"]):
+                    forbidden_topics.add("FAMILY")
             
-            if question_types:
-                parts.append(f"   ❌ Already asked about: {', '.join(question_types)}")
+            if forbidden_topics:
+                parts.append(f"   ❌❌ FORBIDDEN: {', '.join(forbidden_topics)}")
+                parts.append("   ⚠️ User will get ANNOYED if you ask about these again!")
             
-            for q in recent_q[-3:]:
-                parts.append(f"   ❌ {q[:35]}")
+            # Show last 5 specific questions
+            parts.append("   Recent questions (DO NOT REPEAT):")
+            for q in all_q[-5:]:
+                parts.append(f"   ❌ {q[:50]}")
         
         # ========== FOOD REQUEST DETECTION ==========
         last_user_msg = ""
@@ -915,7 +991,13 @@ class ContextBuilder:
     # =========================================================================
     
     async def _get_memories(self, user_id: str) -> dict:
-        """Get memories from database"""
+        """Get memories from database (CACHED for entire session)"""
+        import time
+        
+        # Check cache first
+        if user_id in self._cache and "memories" in self._cache[user_id]:
+            return self._cache[user_id]["memories"]
+        
         if not self._supabase:
             return {}
         
@@ -924,13 +1006,28 @@ class ContextBuilder:
                 .select("name, facts, preferences")\
                 .eq("user_id", user_id)\
                 .execute()
-            return result.data[0] if result.data else {}
+            data = result.data[0] if result.data else {}
+            
+            # Cache it
+            if user_id not in self._cache:
+                self._cache[user_id] = {}
+            self._cache[user_id]["memories"] = data
+            
+            return data
         except Exception as e:
             logger.error(f"Failed to get memories: {e}")
             return {}
     
     async def _get_short_term_profile(self, user_id: str) -> dict:
-        """Get short-term profile from database"""
+        """Get short-term profile from database (CACHED for 60s)"""
+        import time
+        
+        # Check cache with TTL
+        if user_id in self._cache and "profile" in self._cache[user_id]:
+            cache_time = self._cache_times.get(user_id, {}).get("profile", 0)
+            if time.time() - cache_time < self._PROFILE_CACHE_TTL:
+                return self._cache[user_id]["profile"]
+        
         if not self._supabase:
             return {}
         
@@ -939,13 +1036,27 @@ class ContextBuilder:
                 .select("profile_data")\
                 .eq("user_id", user_id)\
                 .execute()
-            return result.data[0].get("profile_data", {}) if result.data else {}
+            data = result.data[0].get("profile_data", {}) if result.data else {}
+            
+            # Cache it with timestamp
+            if user_id not in self._cache:
+                self._cache[user_id] = {}
+            if user_id not in self._cache_times:
+                self._cache_times[user_id] = {}
+            self._cache[user_id]["profile"] = data
+            self._cache_times[user_id]["profile"] = time.time()
+            
+            return data
         except Exception as e:
             logger.error(f"Failed to get short-term profile: {e}")
             return {}
     
     async def _get_recent_summaries(self, user_id: str) -> list[dict]:
-        """Get ALL 3 recent conversation summaries"""
+        """Get ALL 3 recent conversation summaries (CACHED for session)"""
+        # Check cache first
+        if user_id in self._cache and "summaries" in self._cache[user_id]:
+            return self._cache[user_id]["summaries"]
+        
         if not self._supabase:
             return []
         
@@ -956,7 +1067,14 @@ class ContextBuilder:
                 .order("created_at", desc=True)\
                 .limit(self.MAX_SUMMARIES_IN_PROMPT)\
                 .execute()
-            return result.data or []
+            data = result.data or []
+            
+            # Cache it
+            if user_id not in self._cache:
+                self._cache[user_id] = {}
+            self._cache[user_id]["summaries"] = data
+            
+            return data
         except Exception as e:
             logger.error(f"Failed to get summaries: {e}")
             return []
@@ -964,9 +1082,12 @@ class ContextBuilder:
     async def _get_recent_conversations(self, user_id: str) -> list[dict]:
         """
         Get ACTUAL recent conversations (real messages!) from last 3 days.
-        This gives AI real context to follow up on specific things like
-        "matar chap", "office meeting", "weekend plans" etc.
+        CACHED FOR SESSION - doesn't change during conversation.
         """
+        # Check cache first
+        if user_id in self._cache and "recent_convos" in self._cache[user_id]:
+            return self._cache[user_id]["recent_convos"]
+        
         if not self._supabase:
             return []
         
@@ -1005,7 +1126,12 @@ class ContextBuilder:
                     "messages": conversations_by_date[date][-8:]  # Last 8 messages per day!
                 })
             
-            logger.info(f"📜 Loaded {len(recent_convos)} days of recent conversations")
+            # Cache it
+            if user_id not in self._cache:
+                self._cache[user_id] = {}
+            self._cache[user_id]["recent_convos"] = recent_convos
+            
+            logger.info(f"📜 Loaded {len(recent_convos)} days of recent conversations (cached)")
             return recent_convos
             
         except Exception as e:
@@ -1013,7 +1139,15 @@ class ContextBuilder:
             return []
     
     async def _get_daily_summary(self, user_id: str) -> dict:
-        """Get most recent daily summary (today or yesterday)"""
+        """Get most recent daily summary (today or yesterday) - CACHED for 60s"""
+        import time
+        
+        # Check cache with TTL (daily summary can change during conversation)
+        if user_id in self._cache and "daily_summary" in self._cache[user_id]:
+            cache_time = self._cache_times.get(user_id, {}).get("daily_summary", 0)
+            if time.time() - cache_time < self._PROFILE_CACHE_TTL:
+                return self._cache[user_id]["daily_summary"]
+        
         if not self._supabase:
             return {}
         
@@ -1032,8 +1166,7 @@ class ContextBuilder:
                 
                 if result.data:
                     data = result.data[0]
-                    logger.info(f"📅 Loaded daily summary for {check_date}")
-                    return {
+                    parsed = {
                         "date": data.get("date"),
                         "dominant_mood": data.get("dominant_mood", "neutral"),
                         "topics_discussed": data.get("topics_discussed", []),
@@ -1044,6 +1177,17 @@ class ContextBuilder:
                         "last_topic": data.get("last_topic"),
                         "conversation_ended_on": data.get("conversation_ended_on"),
                     }
+                    
+                    # Cache it
+                    if user_id not in self._cache:
+                        self._cache[user_id] = {}
+                    if user_id not in self._cache_times:
+                        self._cache_times[user_id] = {}
+                    self._cache[user_id]["daily_summary"] = parsed
+                    self._cache_times[user_id]["daily_summary"] = time.time()
+                    
+                    logger.info(f"📅 Loaded daily summary for {check_date} (cached)")
+                    return parsed
             
             logger.info(f"📅 No daily summary found for {today} or {yesterday}")
             return {}
