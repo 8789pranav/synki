@@ -2719,3 +2719,81 @@ audio { display: none; }
     outline: none;
     border-color: var(--primary);
 }
+
+/* ===== MOBILE RESPONSIVENESS ===== */
+@media (max-width: 768px) {
+    .main-container {
+        max-width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .nav-bar {
+        padding: 0 12px;
+        height: 56px;
+    }
+    
+    .app-title {
+        font-size: 1.25rem;
+    }
+    
+    .main-tab-nav {
+        padding: 0 8px;
+    }
+    
+    .main-tab-btn {
+        padding: 10px 16px;
+        font-size: 0.85rem;
+    }
+    
+    .chat-messages {
+        padding: 12px;
+    }
+    
+    .message {
+        max-width: 90%;
+        padding: 12px 14px;
+    }
+    
+    .chat-input-container {
+        padding: 12px;
+    }
+    
+    .chat-input {
+        padding: 14px;
+    }
+    
+    .voice-btn {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .settings-container {
+        padding: 12px;
+    }
+}
+
+/* iOS Safari safe area support */
+@supports (padding-top: env(safe-area-inset-top)) {
+    .nav-bar {
+        padding-top: env(safe-area-inset-top);
+    }
+    
+    .chat-input-container {
+        padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+}
+
+/* Touch-friendly buttons */
+@media (hover: none) and (pointer: coarse) {
+    .main-tab-btn,
+    .voice-btn,
+    .send-btn,
+    .toggle-switch {
+        -webkit-tap-highlight-color: transparent;
+    }
+    
+    .voice-btn:active {
+        transform: scale(0.95);
+    }
+}
